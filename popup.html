@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --primary: #f39c12;
+      --secondary: #e67e22;
+      --bg: #ffffff;
+      --text: #333333;
+      --light-text: #888888;
+      --border: rgba(0, 0, 0, 0.05);
+      --sunset-gradient: linear-gradient(135deg, #FF8C00 0%, #FF0080 100%);
+    }
+
+    body {
+      width: 350px;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f8f9fa;
+      color: var(--text);
+    }
+
+    /* Header Section */
+    .header {
+      background: var(--sunset-gradient);
+      padding: 20px;
+      color: white;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .header p {
+      margin: 5px 0 0 0;
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    /* Switch Style (New) */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255,255,255,0.3);
+      transition: .4s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px; width: 14px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #2ecc71; }
+    input:checked + .slider:before { transform: translateX(16px); }
+
+    /* Stats Summary */
+    .stats-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 15px;
+      background: white;
+      margin-bottom: 10px;
+    }
+
+    .stat-card {
+      background: #fff9f0;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid rgba(243, 156, 18, 0.1);
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--secondary);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--light-text);
+      text-transform: uppercase;
+    }
+
+    /* History Section */
+    .history-section {
+      background: white;
+      padding: 15px 20px;
+      max-height: 380px;
+      overflow-y: auto;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.02);
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-title::before {
+      content: '🐾';
+      margin-right: 8px;
+      font-size: 14px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.03);
+      transition: all 0.2s ease;
+      cursor: default;
+    }
+
+    .history-item:hover {
+      background: rgba(243, 156, 18, 0.02);
+      padding-left: 5px;
+      padding-right: 5px;
+      margin-left: -5px;
+      margin-right: -5px;
+      border-radius: 8px;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .site-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      flex-shrink: 0;
+    }
+
+    .site-info {
+      flex-grow: 1;
+      overflow: hidden;
+    }
+
+    .site-title {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+
+    .site-meta {
+      font-size: 11px;
+      color: var(--light-text);
+      display: flex;
+      gap: 8px;
+    }
+
+    .site-time {
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #ccc;
+    }
+
+    .empty-state i {
+      font-size: 40px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 12px;
+      text-align: center;
+      font-size: 10px;
+      color: #bbb;
+      background: #f8f9fa;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #eee;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ddd;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+      <h1>伴影</h1>
+      <label class="switch">
+        <input type="checkbox" id="master-switch" checked>
+        <span class="slider round"></span>
+      </label>
+    </div>
+    <p>Shadow Mate · 始终守护</p>
+  </div>
+
+  <div class="stats-container">
+    <div class="stat-card">
+      <span class="stat-value" id="today-duration">0m</span>
+      <span class="stat-label">活跃时长</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="today-clicks">0</span>
+      <span class="stat-label">累计点击</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="today-scroll">0m</span>
+      <span class="stat-label">滚动距离</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="today-chars">0</span>
+      <span class="stat-label">敲击字数</span>
+    </div>
+  </div>
+
+  <div class="history-section">
+    <div class="section-title">
+      <div style="display: flex; align-items: center;">
+        <span>今日足迹 <small id="today-sites-count" style="font-size: 10px; color: #aaa; margin-left: 5px; font-weight: 400;"></small></span>
+      </div>
+      <span style="font-size: 10px; font-weight: 400; color: #bbb; background: #f5f5f5; padding: 2px 8px; border-radius: 10px;">
+        24h 滚动清理
+      </span>
+    </div>
+    
+    <!-- 设置区域 (New) -->
+    <div style="margin-bottom: 15px; padding: 10px; background: #fff9f0; border-radius: 10px; border: 1px dashed #f39c1244;">
+      <div style="font-size: 11px; color: #e67e22; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+        <span>🌅 你的“归航时刻”</span>
+        <input type="time" id="sunset-time" style="border: none; background: white; border-radius: 4px; padding: 2px 5px; font-size: 11px; color: #f39c12; cursor: pointer;">
+      </div>
+      <p style="margin: 0; font-size: 9px; color: #aaa;">设置后，余晖模式将在该时间前 30 分钟开启</p>
+    </div>
+
+    <div class="history-list" id="history-list">
+      <!-- 动态加载 -->
+      <div class="empty-state">
+        <span style="font-size: 24px; display: block; margin-bottom: 10px;">⏳</span>
+        正在捕捉你的轨迹...
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div id="debug-actions" style="margin-bottom: 8px;">
+      <button id="btn-reset-ritual" style="background:none; border:1px solid #ddd; color:#999; font-size:9px; padding:2px 5px; cursor:pointer; border-radius:4px;">重置今日提示状态</button>
+    </div>
+    数据仅保存在本地 · 伴影静默守护中
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

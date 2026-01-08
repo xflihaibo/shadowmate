@@ -162,12 +162,8 @@ async function updateOtherStats(tabId, data, senderUrl) {
 }
 
 async function handleSummaryRequest() {
-  const result = await chrome.storage.local.get({ lastShownDate: "" });
-  const today = new Date().toDateString();
-  if (result.lastShownDate === today) return null;
   const summary = await getTodaySummary();
   if (!summary || summary.sites === 0) return null;
-  await chrome.storage.local.set({ lastShownDate: today });
   return summary;
 }
 

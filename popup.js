@@ -123,6 +123,10 @@ function renderHistory(todayData) {
     
     const itemEl = document.createElement('div');
     itemEl.className = 'history-item';
+    itemEl.title = `跳转至: ${item.url}`;
+    itemEl.addEventListener('click', () => {
+      chrome.tabs.create({ url: item.url });
+    });
     
     // 创建图标
     const iconEl = document.createElement('img');

@@ -6,10 +6,39 @@ let stats = {
 };
 
 let isRitualShown = false; 
-let isGhostClosed = false; 
+let localGhostClosed = false; // 当前 Tab 的关闭状态
 
 function isContextValid() {
   return typeof chrome !== 'undefined' && chrome.runtime && !!chrome.runtime.id;
+}
+
+// 监听存储变化，实现多 Tab 同步关闭
+if (isContextValid()) {
+  chrome.storage.onChanged.addListener((changes) => {
+    const today = new Date().toDateString();
+    
+    // 监听仪式（幽灵）关闭
+    if (changes.isGhostClosedToday && changes.isGhostClosedToday.newValue === today) {
+      document.querySelectorAll('.shadow-mate-ghost, .shadow-mate-card').forEach(el => {
+        if (el.dataset.type !== 'hint') el.remove();
+      });
+      document.getElementById('shadow-mate-sunset-overlay')?.remove();
+    }
+    
+    // 监听提示（蜡烛）关闭
+    if (changes.isHintClosedToday && changes.isHintClosedToday.newValue === today) {
+      document.querySelectorAll('.shadow-mate-ghost').forEach(el => {
+        if (el.querySelector('span')?.textContent === '🕯️') el.remove();
+      });
+      document.getElementById('shadow-mate-sunset-overlay')?.remove();
+    }
+  });
+}
+
+async function checkGhostClosed() {
+  if (!isContextValid()) return true;
+  const res = await chrome.storage.local.get({ isGhostClosedToday: '' });
+  return res.isGhostClosedToday === new Date().toDateString();
 }
 
 // 0. 活跃时长心跳
@@ -102,22 +131,56 @@ const syncInterval = setInterval(() => {
 
 async function updateGoldenHourEffect() {
   if (!isContextValid()) return;
+  
   try {
-    const settings = await chrome.storage.local.get({ sunsetTime: '18:00' });
-    const [sh, sm] = settings.sunsetTime.split(':').map(Number);
+    const res = await chrome.storage.local.get({ 
+      sunsetTime: '18:00', 
+      lastRitualDate: '',
+      isGhostClosedToday: '',
+      isHintClosedToday: ''
+    });
+    
     const now = new Date();
+    const today = now.toDateString();
+    const isGhostClosed = res.isGhostClosedToday === today;
+    const isHintClosed = res.isHintClosedToday === today;
+    
+    const [sh, sm] = res.sunsetTime.split(':').map(Number);
     const totalMins = now.getHours() * 60 + now.getMinutes();
     const sunsetMins = sh * 60 + sm;
     const startMins = sunsetMins - 30;
 
     let overlay = document.getElementById('shadow-mate-sunset-overlay');
+    
+    // 1. 到达或超过下班时间
     if (totalMins >= sunsetMins) {
-      if (!isRitualShown) showSunsetRitual();
+      if (isGhostClosed) {
+        document.querySelectorAll('.shadow-mate-ghost, .shadow-mate-card').forEach(el => el.remove());
+        document.getElementById('shadow-mate-sunset-overlay')?.remove();
+        return;
+      }
+
       if (overlay) overlay.style.background = `rgba(255, 140, 0, 0.05)`;
+      
+      const ghost = document.querySelector('.shadow-mate-ghost');
+      const isCandle = ghost && ghost.querySelector('span')?.textContent === '🕯️';
+      
+      if (!isRitualShown || isCandle) {
+        showSunsetRitual(true); 
+      }
       return;
     }
 
+    // 2. 余晖时间 (下班前 30 分钟)
     if (totalMins >= startMins && totalMins < sunsetMins) {
+      if (isHintClosed) {
+        document.querySelectorAll('.shadow-mate-ghost').forEach(el => {
+          if (el.querySelector('span')?.textContent === '🕯️') el.remove();
+        });
+        document.getElementById('shadow-mate-sunset-overlay')?.remove();
+        return;
+      }
+
       if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'shadow-mate-sunset-overlay';
@@ -127,7 +190,7 @@ async function updateGoldenHourEffect() {
       const progress = (totalMins - startMins) / (sunsetMins - startMins);
       overlay.style.background = `rgba(255, 140, 0, ${progress * 0.05})`;
       
-      if (!isGhostClosed && !document.querySelector('.shadow-mate-ghost')) {
+      if (!document.querySelector('.shadow-mate-ghost')) {
         injectStyles();
         createGhostUI(null);
       }
@@ -142,14 +205,17 @@ async function updateGoldenHourEffect() {
   } catch (e) {}
 }
 
-setInterval(() => { if (isContextValid()) updateGoldenHourEffect(); }, 30000);
+setInterval(() => { if (isContextValid()) updateGoldenHourEffect(); }, 10000);
 updateGoldenHourEffect();
 
 if (isContextValid()) {
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TRIGGER_SUNSET') {
-      isRitualShown = false; isGhostClosed = false;
-      checkEnabled(() => showSunsetRitual());
+      isRitualShown = false;
+      // 重置所有关闭状态，强制触发
+      chrome.storage.local.set({ isGhostClosedToday: '', isHintClosedToday: '' }, () => {
+        checkEnabled(() => showSunsetRitual(true));
+      });
     } else if (message.type === 'STATE_CHANGED') {
       if (!message.isEnabled) {
         document.getElementById('shadow-mate-sunset-overlay')?.remove();
@@ -179,8 +245,11 @@ async function checkTimeAndShow() {
   } catch(e) {}
 }
 
-function showMemoryGhost(memory) {
-  if (!isContextValid() || isGhostClosed) return;
+async function showMemoryGhost(memory) {
+  if (!isContextValid()) return;
+  const isClosed = await checkGhostClosed();
+  if (isClosed) return;
+
   const msg = `嗨，我们在 ${new Date(memory.visitTime).toLocaleDateString()} 见过。当时你在这里留下了 ${memory.charsTyped || 0} 个字，思考得真认真呢。✨`;
   injectStyles();
   const ghost = document.createElement('div');
@@ -189,16 +258,41 @@ function showMemoryGhost(memory) {
   ghost.innerHTML = `<div class="shadow-mate-ghost-close" title="再见">×</div><div class="shadow-mate-bubble" style="opacity:1; transform:translateY(0) scale(1);">${msg}</div><span style="font-size: 24px;">💭</span>`;
   document.body.appendChild(ghost);
   ghost.addEventListener('click', (e) => { 
-    if (e.target.classList.contains('shadow-mate-ghost-close')) { ghost.remove(); isGhostClosed = true; } 
+    if (e.target.classList.contains('shadow-mate-ghost-close')) { 
+      ghost.remove(); 
+      chrome.storage.local.set({ isGhostClosedToday: new Date().toDateString() });
+    } 
   });
 }
 
 checkTimeAndShow();
 
-async function showSunsetRitual() {
-  if (isRitualShown || !isContextValid()) return;
+async function showSunsetRitual(force = false) {
+  if (!isContextValid()) return;
+  const isClosed = await checkGhostClosed();
+  if (isClosed && !force) return;
+
+  // 如果已经显示了幽灵（不是蜡烛），则不再重复触发
+  const existingGhost = document.querySelector('.shadow-mate-ghost');
+  if (existingGhost && existingGhost.querySelector('span')?.textContent === '👻' && isRitualShown) {
+    return;
+  }
+
+  if (isRitualShown && !force) return;
+  
+  // 防止在请求过程中多次触发
+  if (showSunsetRitual.isFetching) return;
+  showSunsetRitual.isFetching = true;
+
   safeSendMessage({ type: 'GET_TODAY_SUMMARY' }, (summary) => {
+    showSunsetRitual.isFetching = false;
     if (!summary || !isContextValid()) return;
+    
+    // 如果是自动触发，则记录今天已触发（全局记录）
+    if (!force) {
+      chrome.storage.local.set({ lastRitualDate: new Date().toDateString() });
+    }
+    
     isRitualShown = true;
     injectStyles();
     document.querySelectorAll('.shadow-mate-ghost').forEach(el => el.remove());
@@ -233,8 +327,8 @@ function injectStyles() {
     .shadow-mate-card.show { display: block; animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     
-    .shadow-mate-card-close { position: absolute; top: 22px; right: 20px; width: 26px; height: 26px; background: rgba(0,0,0,0.05); color: #888; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; transition: 0.3s; padding-bottom: 2px; }
-    .shadow-mate-card-close:hover { background: #ff5f56; color: white; }
+    .shadow-mate-card-close { position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; background: rgba(0,0,0,0.05); color: #888; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; transition: 0.3s; z-index: 10010; pointer-events: auto !important; user-select: none; line-height: 1; padding-bottom: 4px; }
+    .shadow-mate-card-close:hover { background: #ff5f56; color: white; transform: rotate(90deg); padding-bottom: 4px; }
     
     .shadow-mate-narrative { line-height: 1.6; color: #555; font-size: 15px; margin-bottom: 20px; font-style: italic; padding-left: 15px; border-left: 3px solid #f39c12; }
     .shadow-mate-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
@@ -268,10 +362,13 @@ function getWarmGreeting(summary) {
 }
 
 function generateShadowNarrative(summary) {
-  const { mainCategory, topSiteTitle, totalDuration, totalChars, peakHour } = summary;
+  const { mainCategory, topSiteTitle, totalDuration, totalChars, totalClicks, totalScroll, peakHour } = summary;
   const hours = Math.round(totalDuration / 3600 * 10) / 10;
   const categoryNames = { work: '航行在代码海洋', study: '漫步在知识森林', social: '在数字广场交汇', video: '驻足在光影之间', other: '静静探索角落' };
-  return `今天，你 ${categoryNames[mainCategory] || '度过了充实的一天'}。大部分时间，你似乎都被 ${topSiteTitle} 吸引了目光。你写下了 ${totalChars} 个字符，那些思考总是沉甸甸的。在 ${peakHour}点 左右，是你思维最活跃的时刻。你在数字世界停留了 ${hours} 小时。`;
+  
+  const scrollMeters = Math.round(totalScroll / 1000);
+  
+  return `今天，你 ${categoryNames[mainCategory] || '度过了充实的一天'}。你似乎在 ${topSiteTitle} 停留了很久，留下了深刻的足迹。你敲下了 ${totalChars} 个思考的碎片，指尖在屏幕上轻快地跳了 ${totalClicks} 次舞，并在数字的峰峦间翻越了 ${scrollMeters} 米。在 ${peakHour}点 左右，是你灵魂最活跃的时刻。你在数字世界已经停留了 ${hours} 小时。`;
 }
 
 function createGhostUI(summary) {
@@ -284,9 +381,23 @@ function createGhostUI(summary) {
   ghost.innerHTML = `<div class="shadow-mate-ghost-close">×</div><div class="shadow-mate-bubble">${greeting}</div><span>👻</span>`;
   document.body.appendChild(ghost);
 
-  ghost.querySelector('.shadow-mate-ghost-close').onclick = (e) => {
-    e.stopPropagation(); ghost.remove(); document.querySelector('.shadow-mate-card')?.remove(); isGhostClosed = true;
-  };
+    const ghostClose = ghost.querySelector('.shadow-mate-ghost-close');
+    ghostClose.addEventListener('click', (e) => {
+      e.stopPropagation(); 
+      const isHint = ghost.querySelector('span')?.textContent === '🕯️';
+      ghost.remove(); 
+      document.querySelector('.shadow-mate-card')?.remove(); 
+      document.getElementById('shadow-mate-sunset-overlay')?.remove(); 
+      
+      const today = new Date().toDateString();
+      if (isHint) {
+        // 仅关闭提前提示（蜡烛）
+        chrome.storage.local.set({ isHintClosedToday: today });
+      } else {
+        // 关闭正式仪式（幽灵）
+        chrome.storage.local.set({ isGhostClosedToday: today });
+      }
+    });
 
   if (summary) {
     const narrative = generateShadowNarrative(summary);
@@ -330,7 +441,12 @@ function createGhostUI(summary) {
       </div>
     `;
     document.body.appendChild(card);
-    card.querySelector('.shadow-mate-card-close').onclick = (e) => { e.stopPropagation(); card.classList.remove('show'); };
+    const closeBtn = card.querySelector('.shadow-mate-card-close');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); 
+      card.classList.remove('show');
+      // 仅隐藏卡片，保留幽灵和滤镜，让用户可以再次点击幽灵打开
+    });
     // 确保不再有覆盖气泡文字的逻辑
     ghost.onclick = () => card.classList.toggle('show');
   }

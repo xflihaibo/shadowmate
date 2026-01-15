@@ -4,7 +4,16 @@ let activeTabInfo = { tabId: null, url: null, startTime: null };
 
 // 1. 初始化
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('dailyCleanup', { periodInMinutes: 1440 });
+  // 设置凌晨1点执行的每日清理任务
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(1, 0, 0, 0); // 明天凌晨1点
+  
+  chrome.alarms.create('dailyCleanup', { 
+    when: tomorrow.getTime(),
+    periodInMinutes: 1440 // 每24小时重复
+  });
   chrome.alarms.create('checkSunset', { periodInMinutes: 60 });
 });
 
@@ -118,6 +127,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.get({ highlightMoments: {} }, (res) => {
       sendResponse(res.highlightMoments[urlKey] || null);
     });
+    return true;
+  }
+  if (message.type === 'TEST_COZE_API') {
+    generateContentWithCoze(message.jdBenefitInfo).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'GENERATE_ENHANCED_NARRATIVE') {
+    generateEnhancedNarrative(message.summary).then(sendResponse);
     return true;
   }
 });
@@ -263,10 +280,102 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   else if (alarm.name === 'checkSunset') checkAndTriggerSunset();
 });
 
+async function generateContentWithCoze(jdBenefitInfo) {
+  const apiUrl = 'https://5p3pcj4wg7.coze.site/run';
+  const bearerToken = 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjcyYmU4YTQyLThhZmMtNGI1ZC04NWM5LTc5YjU1NmU0YzZjOCJ9.eyJpc3MiOiJodHRwczovL2FwaS5jb3plLmNuIiwiYXVkIjpbIm5iV2J3MHFlTW5SWVRnSG5FR2FqcHBaUFQxdWhGTU9LIl0sImV4cCI6ODIxMDI2Njg3Njc5OSwiaWF0IjoxNzY4NDU3NjQ3LCJzdWIiOiJzcGlmZmU6Ly9hcGkuY296ZS5jbi93b3JrbG9hZF9pZGVudGl0eS9pZDo3NTk1NDYwNzcxMTk1MTI1ODAyIiwic3JjIjoiaW5ib3VuZF9hdXRoX2FjY2Vzc190b2tlbl9pZDo3NTk1NDY3NzU5ODk5NjM5ODE4In0.m4IW8OeYHEVnOUqNpekezyuFIjtDYOZL9R18RZaREfVNaOs9kH9at7Qzg2BCIIovdo8YkUCxAIlE6MxTkXuDtaDHygMPJIE04im90aqPUfKJptwU9FGFdsxDC9X9V0_NMwUA2E3ZsLxKLYdL-VA0SIkUeVfiqituD1wg32M7aici-nox_6lkcgSf0e1DqyeyGStxoM8jc9QT5_4wcbEFR0IiohID50hlwn3QGJRiC9lkgZEnp4Q5GIxZlRmQuY5JNYoraiVFY9h-Iq0fT6mg3Frk17-PDb2_SWoaQw0CZo9iyLMCsGYG7X9LHE4Iwiov_ieGT9rAFa3DbPWTlTN5rw';
+  
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${bearerToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        jd_benefit_info: jdBenefitInfo
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('Coze API result:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Error calling Coze API:', error);
+    return null;
+  }
+}
+
+async function generateEnhancedNarrative(summary) {
+  const shoppingKeywords = ['jd', 'taobao', 'tmall', 'pdd', 'suning', 'gome', 'amazon'];
+  const hasShoppingActivity = summary.keywords.some(keyword => 
+    shoppingKeywords.some(shop => keyword.toLowerCase().includes(shop))
+  );
+  
+  let additionalContent = '';
+  
+  if (hasShoppingActivity && summary.keywords.length > 0) {
+    const result = await chrome.storage.local.get({ browsingData: [] });
+    const today = new Date().toDateString();
+    const todayData = result.browsingData.filter(record => 
+      new Date(record.visitTime).toDateString() === today
+    );
+    
+    const shoppingUrls = todayData
+      .filter(record => shoppingKeywords.some(shop => 
+        record.url.toLowerCase().includes(shop)
+      ))
+      .map(record => record.url)
+      .slice(0, 3);
+    
+    if (shoppingUrls.length > 0) {
+      for (const url of shoppingUrls) {
+        const cozeResult = await generateContentWithCoze(url);
+        if (cozeResult && cozeResult.generated_copy) {
+          additionalContent += `\n\n💰 今日购物发现：\n${cozeResult.generated_copy}`;
+          if (cozeResult.generated_image_url) {
+            additionalContent += `\n📸 [商品图片已生成]`;
+          }
+        }
+      }
+    }
+  }
+  
+  return additionalContent;
+}
+
 function clearOldData() {
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const today = new Date().toDateString();
+  
   chrome.storage.local.get({ browsingData: [] }, (result) => {
+    // 清理过期的浏览数据
     const filteredData = result.browsingData.filter(record => record.visitTime > oneDayAgo);
     chrome.storage.local.set({ browsingData: filteredData });
+  });
+  
+  // 清理过期的关闭状态（重置所有关闭状态为新的一天）
+  chrome.storage.local.get(['isGhostClosedToday', 'isHintClosedToday', 'lastRitualDate'], (result) => {
+    const updates = {};
+    
+    // 如果关闭状态不是今天的，说明已过期，需要重置
+    if (result.isGhostClosedToday !== today) {
+      updates.isGhostClosedToday = '';
+    }
+    if (result.isHintClosedToday !== today) {
+      updates.isHintClosedToday = '';
+    }
+    if (result.lastRitualDate !== today) {
+      updates.lastRitualDate = '';
+    }
+    
+    // 如果有需要更新的状态，执行更新
+    if (Object.keys(updates).length > 0) {
+      chrome.storage.local.set(updates);
+    }
   });
 }

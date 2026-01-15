@@ -323,7 +323,7 @@ function injectStyles() {
     .shadow-mate-bubble { position: absolute; right: 75px; bottom: 10px; background: rgba(255, 255, 255, 0.95); padding: 12px 18px; border-radius: 20px 20px 0 20px; white-space: nowrap; box-shadow: 0 8px 25px rgba(0,0,0,0.1); opacity: 0; transform: translateY(20px) scale(0.8); transition: all 0.4s ease; pointer-events: none; color: #444; font-size: 14px; font-weight: 500; border: 1px solid rgba(0,0,0,0.05); }
     .shadow-mate-ghost.active .shadow-mate-bubble { opacity: 1; transform: translateY(0) scale(1); }
     
-    .shadow-mate-card { position: fixed; right: 30px; bottom: 120px; width: 340px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); border-radius: 24px; padding: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); z-index: 10001; display: none; border: 1px solid rgba(255,255,255,0.5); color: #333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .shadow-mate-card { position: fixed; right: 30px; bottom: 120px; width: 340px; max-height: 600px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); border-radius: 24px; padding: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); z-index: 10001; display: none; border: 1px solid rgba(255,255,255,0.5); color: #333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-y: auto; }
     .shadow-mate-card.show { display: block; animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     
@@ -345,6 +345,11 @@ function injectStyles() {
     .shadow-mate-timeline-tags { font-size: 10px; color: #777; margin-top: 2px; }
     .shadow-mate-keywords { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; }
     .shadow-mate-keyword { background: rgba(243, 156, 18, 0.1); color: #d35400; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    
+    .shadow-mate-card::-webkit-scrollbar { width: 6px; }
+    .shadow-mate-card::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .shadow-mate-card::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
+    .shadow-mate-card::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
   `;
   document.head.appendChild(style);
 }

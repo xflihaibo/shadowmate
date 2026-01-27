@@ -3,11 +3,17 @@
 document.addEventListener('DOMContentLoaded', () => {
   loadDashboardData();
   initSettings();
+  loadClipboardHistory();
   
   // 实时监听存储变化并刷新 UI
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.browsingData) {
-      loadDashboardData();
+    if (areaName === 'local') {
+      if (changes.browsingData) {
+        loadDashboardData();
+      }
+      if (changes.clipboardHistory) {
+        loadClipboardHistory();
+      }
     }
   });
 });
@@ -176,5 +182,67 @@ function getDomain(urlStr) {
     return new URL(urlStr).hostname;
   } catch (e) {
     return urlStr;
+  }
+}
+
+// 剪贴板历史管理
+async function loadClipboardHistory() {
+  try {
+    const result = await chrome.storage.local.get({ clipboardHistory: [] });
+    const history = result.clipboardHistory || [];
+    renderClipboardHistory(history);
+  } catch (e) {
+    console.error('加载剪贴板历史失败', e);
+  }
+}
+
+function renderClipboardHistory(history) {
+  const clipboardList = document.getElementById('clipboard-list');
+  
+  if (!history || history.length === 0) {
+    clipboardList.innerHTML = '<div class="clipboard-empty">暂无复制记录</div>';
+    return;
+  }
+
+  // 只显示最多10条
+  const displayHistory = history.slice(0, 10);
+  clipboardList.innerHTML = '';
+
+  displayHistory.forEach((item, index) => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'clipboard-item';
+    
+    const contentEl = document.createElement('div');
+    contentEl.className = 'clipboard-content';
+    contentEl.textContent = item.text || '';
+    contentEl.title = item.text || ''; // 鼠标悬停显示完整内容
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'clipboard-delete';
+    deleteBtn.textContent = '×';
+    deleteBtn.title = '删除';
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await deleteClipboardItem(index);
+    });
+    
+    itemEl.appendChild(contentEl);
+    itemEl.appendChild(deleteBtn);
+    clipboardList.appendChild(itemEl);
+  });
+}
+
+async function deleteClipboardItem(index) {
+  try {
+    const result = await chrome.storage.local.get({ clipboardHistory: [] });
+    let history = result.clipboardHistory || [];
+    
+    // 删除指定索引的项
+    history.splice(index, 1);
+    
+    await chrome.storage.local.set({ clipboardHistory: history });
+    // loadClipboardHistory 会通过 onChanged 监听自动触发
+  } catch (e) {
+    console.error('删除剪贴板项失败', e);
   }
 }

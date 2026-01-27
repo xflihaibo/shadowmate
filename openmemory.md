@@ -21,6 +21,7 @@ A new Chrome extension project.
 - **Sunset Card**: Glassmorphism dashboard with 2x2 labor grid, timeline, and weighted keywords.
 - **Popup Dashboard**: Real-time summary grid and time-sorted trace list.
 - **Safety Fusion**: Multi-layer protection against `context invalidated` errors.
+- **Clipboard Memory**: Records last 10 copied items, auto-fills empty inputs on focus, supports arrow key navigation with preview tooltip.
 
 ## Patterns
 - **Time-Weighted Keywords**: Sorting 10 keywords by the accumulated stay duration of their pages.
@@ -29,3 +30,4 @@ A new Chrome extension project.
 - **Privacy-First**: No data upload, local processing only.
 - **Time Capsule**: Reunion messages for highly interactive pages after 12h+.
 - **Clean URL Mapping**: Aggregating data based on normalized URL (origin + pathname).
+- **Clipboard Persistence**: Cross-site clipboard history (max 10 items) with auto-fill on input focus, arrow key navigation, and preview tooltip. Excludes password/file/hidden inputs. Supports input/textarea/contenteditable elements.

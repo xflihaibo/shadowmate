@@ -1,0 +1,16 @@
+{
+  "name": "shadow-mate",
+  "version": "1.0.1",
+  "description": "伴影 (Shadow Mate) - 静默陪伴你的数字生活，在归航时刻送上温馨总结",
+  "scripts": {
+    "build": "node build.js",
+    "validate": "node build.js --validate"
+  },
+  "keywords": [
+    "chrome-extension",
+    "shadow-mate",
+    "伴影"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -74,6 +74,424 @@ window.addEventListener('scroll', () => {
   });
 }, { passive: true });
 
+// ========== 剪贴板记忆功能 ==========
+const MAX_CLIPBOARD_HISTORY = 10;
+let clipboardHistory = [];
+let currentFocusedInput = null;
+let currentClipboardIndex = -1; // 当前选中的剪贴板历史索引
+let previewTooltip = null; // 内容预览提示框
+
+// 加载剪贴板历史
+async function loadClipboardHistory() {
+  if (!isContextValid()) return;
+  try {
+    const res = await chrome.storage.local.get({ clipboardHistory: [] });
+    clipboardHistory = res.clipboardHistory || [];
+  } catch (e) {
+    console.error('伴影：加载剪贴板历史失败', e);
+  }
+}
+
+// 保存剪贴板历史
+async function saveClipboardHistory() {
+  if (!isContextValid()) return;
+  try {
+    await chrome.storage.local.set({ 
+      clipboardHistory: clipboardHistory.slice(0, MAX_CLIPBOARD_HISTORY) 
+    });
+  } catch (e) {
+    console.error('伴影：保存剪贴板历史失败', e);
+  }
+}
+
+// 保存最近一次选择的文本（用于复制事件）
+let lastSelection = '';
+
+// 监听选择变化，保存当前选中的文本
+document.addEventListener('selectionchange', () => {
+  if (!isContextValid()) return;
+  try {
+    const selection = window.getSelection().toString().trim();
+    if (selection) {
+      lastSelection = selection;
+    }
+  } catch (e) {}
+});
+
+// 保存剪贴板内容的通用函数（带去重检查）
+async function saveClipboardText(text) {
+  if (!text || text.trim().length === 0) {
+    return false;
+  }
+  
+  const trimmedText = text.trim();
+  
+  // 先加载最新历史，避免覆盖
+  await loadClipboardHistory();
+  
+  // 检查去重：检查所有历史记录，如果已存在相同内容，则不保存
+  const isDuplicate = clipboardHistory.some(item => item.text === trimmedText);
+  if (isDuplicate) {
+    console.log('伴影：检测到重复内容，跳过保存', trimmedText.substring(0, 20) + '...');
+    return false;
+  }
+  
+  // 添加到历史记录的开头
+  clipboardHistory.unshift({
+    text: trimmedText,
+    timestamp: Date.now(),
+    url: window.location.href
+  });
+  
+  // 限制历史记录数量
+  if (clipboardHistory.length > MAX_CLIPBOARD_HISTORY) {
+    clipboardHistory = clipboardHistory.slice(0, MAX_CLIPBOARD_HISTORY);
+  }
+  
+  await saveClipboardHistory();
+  console.log('伴影：已保存剪贴板记录', trimmedText.substring(0, 30) + '...');
+  return true;
+}
+
+// 监听复制事件（浏览器内复制）
+document.addEventListener('copy', async (e) => {
+  if (!isContextValid()) return;
+  checkEnabled(async () => {
+    try {
+      let copiedText = '';
+      
+      // 方法1: 立即从当前选择获取（此时选择应该还在）
+      copiedText = window.getSelection().toString().trim();
+      
+      // 方法2: 如果获取不到，使用之前保存的选择
+      if (!copiedText && lastSelection) {
+        copiedText = lastSelection;
+      }
+      
+      if (copiedText) {
+        await saveClipboardText(copiedText);
+        // 清空临时选择（避免下次误用）
+        lastSelection = '';
+      }
+    } catch (err) {
+      console.error('伴影：保存剪贴板记录失败', err);
+    }
+  });
+}, true);
+
+// 保存最近一次输入框的值，用于检测粘贴
+const inputValueCache = new WeakMap();
+let lastPasteTime = 0;
+
+// 监听粘贴事件（从外部应用复制的内容会在粘贴时进入浏览器）
+document.addEventListener('paste', async (e) => {
+  if (!isContextValid()) return;
+  checkEnabled(async () => {
+    try {
+      lastPasteTime = Date.now();
+      
+      // 从 clipboardData 获取粘贴的内容
+      if (e.clipboardData) {
+        const pastedText = e.clipboardData.getData('text/plain');
+        if (pastedText && pastedText.trim().length > 0) {
+          console.log('伴影：检测到粘贴事件', pastedText.substring(0, 30) + '...');
+          // 立即保存
+          await saveClipboardText(pastedText);
+        }
+      } else {
+        // 如果 clipboardData 不可用，尝试使用 Clipboard API
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            const clipboardText = await navigator.clipboard.readText();
+            if (clipboardText && clipboardText.trim().length > 0) {
+              console.log('伴影：通过 Clipboard API 检测到粘贴', clipboardText.substring(0, 30) + '...');
+              await saveClipboardText(clipboardText);
+            }
+          }
+        } catch (clipError) {
+          console.log('伴影：Clipboard API 不可用，将在 input 事件中检测');
+        }
+      }
+    } catch (err) {
+      console.error('伴影：处理粘贴事件失败', err);
+    }
+  });
+}, true);
+
+// 监听输入框的 input 事件，检测粘贴操作（补充方案）
+document.addEventListener('input', async (e) => {
+  if (!isContextValid()) return;
+  checkEnabled(async () => {
+    try {
+      const target = e.target;
+      
+      // 只处理 input 和 textarea
+      if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+        return;
+      }
+      
+      // 排除密码框等
+      if (target.type === 'password' || target.type === 'file' || target.type === 'hidden') {
+        return;
+      }
+      
+      // 获取当前值
+      const currentValue = target.value || (target.isContentEditable ? target.innerText : '');
+      
+      // 获取之前的值
+      const previousValue = inputValueCache.get(target) || '';
+      
+      // 如果值发生了显著变化（可能是粘贴），且距离上次粘贴事件很近（2秒内）
+      if (currentValue !== previousValue && 
+          (Date.now() - lastPasteTime) < 2000 &&
+          currentValue.length > previousValue.length + 10) { // 增加了至少10个字符
+        
+        // 尝试从剪贴板读取
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            const clipboardText = await navigator.clipboard.readText();
+            if (clipboardText && clipboardText.trim().length > 0) {
+              // 检查粘贴的内容是否包含剪贴板的内容
+              if (currentValue.includes(clipboardText.trim())) {
+                console.log('伴影：通过 input 事件检测到粘贴', clipboardText.substring(0, 30) + '...');
+                await saveClipboardText(clipboardText);
+              }
+            }
+          }
+        } catch (clipError) {
+          // 忽略错误
+        }
+      }
+      
+      // 更新缓存
+      inputValueCache.set(target, currentValue);
+    } catch (err) {
+      // 忽略错误
+    }
+  });
+}, true);
+
+// 定期检查剪贴板内容（用于检测从外部应用复制的内容）
+let clipboardCheckInterval = null;
+
+async function checkClipboardContent() {
+  if (!isContextValid()) return;
+  
+  try {
+    // 使用 Clipboard API 读取剪贴板内容（需要用户交互上下文）
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const clipboardText = await navigator.clipboard.readText();
+      if (clipboardText && clipboardText.trim().length > 0) {
+        await saveClipboardText(clipboardText);
+      }
+    }
+  } catch (err) {
+    // Clipboard API 可能因为权限或上下文问题失败，这是正常的
+    // 我们主要依赖 paste 事件来捕获外部复制的内容
+  }
+}
+
+// 当页面获得焦点时，检查一次剪贴板内容
+window.addEventListener('focus', async () => {
+  if (!isContextValid()) return;
+  checkEnabled(async () => {
+    // 延迟检查，确保页面完全加载
+    setTimeout(() => {
+      checkClipboardContent();
+    }, 500);
+  });
+});
+
+// 创建内容预览提示框
+function createPreviewTooltip() {
+  if (previewTooltip) return previewTooltip;
+  
+  previewTooltip = document.createElement('div');
+  previewTooltip.id = 'shadow-mate-clipboard-preview';
+  previewTooltip.style.cssText = `
+    position: fixed;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 300px;
+    z-index: 100000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    word-break: break-word;
+    line-height: 1.4;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  `;
+  document.body.appendChild(previewTooltip);
+  return previewTooltip;
+}
+
+// 显示内容预览
+function showPreview(text, inputElement) {
+  if (!text || !inputElement) {
+    hidePreview();
+    return;
+  }
+  
+  const tooltip = createPreviewTooltip();
+  tooltip.textContent = text.length > 50 ? text.substring(0, 50) + '...' : text;
+  
+  const rect = inputElement.getBoundingClientRect();
+  tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
+  tooltip.style.left = rect.left + 'px';
+  tooltip.style.opacity = '1';
+}
+
+// 隐藏内容预览
+function hidePreview() {
+  if (previewTooltip) {
+    previewTooltip.style.opacity = '0';
+  }
+}
+
+// 填充输入框
+function fillInput(inputElement, text) {
+  if (!inputElement || !text) return;
+  
+  try {
+    if (inputElement.isContentEditable) {
+      inputElement.innerText = text;
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      inputElement.value = text;
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    // 显示预览
+    showPreview(text, inputElement);
+    
+    // 2秒后隐藏预览
+    setTimeout(() => {
+      hidePreview();
+    }, 2000);
+  } catch (e) {
+    console.error('伴影：填充输入框失败', e);
+  }
+}
+
+// 输入框获得焦点
+document.addEventListener('focusin', async (e) => {
+  if (!isContextValid()) return;
+  checkEnabled(async () => {
+    const target = e.target;
+    
+    // 只处理 input、textarea 和 contenteditable
+    if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+      return;
+    }
+    
+    // 排除密码框、文件选择框、隐藏输入框
+    if (target.type === 'password' || target.type === 'file' || target.type === 'hidden') {
+      return;
+    }
+    
+    // 如果输入框已经有内容，不自动填充
+    const currentValue = target.value || (target.isContentEditable ? target.innerText : '');
+    if (currentValue && currentValue.trim().length > 0) {
+      currentFocusedInput = target;
+      currentClipboardIndex = -1;
+      return;
+    }
+    
+    currentFocusedInput = target;
+    
+    // 检查剪贴板内容（捕获从外部应用复制的内容）
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText && clipboardText.trim().length > 0) {
+          console.log('伴影：输入框获得焦点时检测到剪贴板内容', clipboardText.substring(0, 30) + '...');
+          await saveClipboardText(clipboardText);
+        }
+      }
+    } catch (clipError) {
+      // Clipboard API 可能因为权限问题失败，这是正常的
+      console.log('伴影：无法读取剪贴板（可能需要用户交互）');
+    }
+    
+    // 加载剪贴板历史
+    await loadClipboardHistory();
+    
+    // 如果有剪贴板历史，自动填充最近的一条
+    if (clipboardHistory.length > 0) {
+      currentClipboardIndex = 0;
+      fillInput(target, clipboardHistory[0].text);
+    } else {
+      currentClipboardIndex = -1;
+    }
+  });
+}, true);
+
+// 输入框失去焦点
+document.addEventListener('focusout', (e) => {
+  if (currentFocusedInput === e.target) {
+    currentFocusedInput = null;
+    currentClipboardIndex = -1;
+    hidePreview();
+  }
+});
+
+// 监听键盘事件（上/下箭头切换）
+document.addEventListener('keydown', async (e) => {
+  if (!isContextValid() || !currentFocusedInput) return;
+  
+  // 只处理上/下箭头键
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  
+  // 如果输入框正在输入，不拦截（让用户正常输入）
+  if (e.target !== currentFocusedInput) return;
+  
+  await loadClipboardHistory();
+  
+  if (clipboardHistory.length === 0) return;
+  
+  // 阻止默认行为
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (e.key === 'ArrowUp') {
+    // 向上切换（更早的记录）
+    if (currentClipboardIndex < clipboardHistory.length - 1) {
+      currentClipboardIndex++;
+    } else {
+      // 循环到第一条
+      currentClipboardIndex = 0;
+    }
+  } else if (e.key === 'ArrowDown') {
+    // 向下切换（更新的记录）
+    if (currentClipboardIndex > 0) {
+      currentClipboardIndex--;
+    } else {
+      // 循环到最后一条
+      currentClipboardIndex = clipboardHistory.length - 1;
+    }
+  }
+  
+  // 填充选中的内容
+  if (currentClipboardIndex >= 0 && currentClipboardIndex < clipboardHistory.length) {
+    fillInput(currentFocusedInput, clipboardHistory[currentClipboardIndex].text);
+  }
+}, true);
+
+// 页面加载时加载剪贴板历史
+loadClipboardHistory();
+
+// 监听存储变化，同步剪贴板历史
+if (isContextValid()) {
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.clipboardHistory) {
+      loadClipboardHistory();
+    }
+  });
+}
+
 function checkEnabled(callback) {
   if (!isContextValid()) return;
   try {

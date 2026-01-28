@@ -302,6 +302,25 @@ window.addEventListener('focus', async () => {
   });
 });
 
+// 监听页面可见性变化，当页面重新可见时，检查当前焦点元素
+document.addEventListener('visibilitychange', () => {
+  if (!isContextValid()) return;
+  if (document.visibilityState === 'visible') {
+    // 页面重新可见时，检查当前焦点元素
+    const activeElement = document.activeElement;
+    if (activeElement && 
+        (activeElement.tagName === 'INPUT' || 
+         activeElement.tagName === 'TEXTAREA' || 
+         activeElement.isContentEditable) &&
+        activeElement.type !== 'password' && 
+        activeElement.type !== 'file' && 
+        activeElement.type !== 'hidden') {
+      currentFocusedInput = activeElement;
+      currentClipboardIndex = -1;
+    }
+  }
+});
+
 // 创建内容预览提示框
 function createPreviewTooltip() {
   if (previewTooltip) return previewTooltip;
@@ -351,15 +370,64 @@ function hidePreview() {
   }
 }
 
+// 在光标位置插入文本（适用于 contenteditable）
+function insertTextAtCursor(element, text) {
+  const selection = window.getSelection();
+  
+  if (selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    
+    // 创建文本节点并插入
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    
+    // 移动光标到插入文本的末尾
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    // 如果没有选中范围，追加到末尾
+    const textNode = document.createTextNode(text);
+    element.appendChild(textNode);
+    
+    // 移动光标到末尾
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+}
+
 // 填充输入框
 function fillInput(inputElement, text) {
   if (!inputElement || !text) return;
   
   try {
     if (inputElement.isContentEditable) {
-      inputElement.innerText = text;
+      // 对于 contenteditable 元素，使用追加/插入的方式
+      const currentContent = inputElement.innerText || inputElement.textContent || '';
+      
+      // 如果元素为空，直接设置内容
+      if (currentContent.trim().length === 0) {
+        inputElement.innerText = text;
+      } else {
+        // 如果已有内容，在光标位置插入文本
+        // 先尝试在光标位置插入
+        try {
+          insertTextAtCursor(inputElement, text);
+        } catch (insertError) {
+          // 如果插入失败，追加到末尾
+          const currentText = inputElement.innerText || inputElement.textContent || '';
+          inputElement.innerText = currentText + text;
+        }
+      }
+      
       inputElement.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
+      // 对于普通 input/textarea，直接替换值
       inputElement.value = text;
       inputElement.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -436,13 +504,49 @@ document.addEventListener('focusout', (e) => {
 
 // 监听键盘事件（上/下箭头切换）
 document.addEventListener('keydown', async (e) => {
-  if (!isContextValid() || !currentFocusedInput) return;
+  if (!isContextValid()) return;
   
   // 只处理上/下箭头键
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
   
+  // 检查当前焦点元素是否是输入框
+  const activeElement = document.activeElement;
+  if (!activeElement) return;
+  
+  // 只处理 input、textarea 和 contenteditable
+  const isInputElement = activeElement.tagName === 'INPUT' || 
+                         activeElement.tagName === 'TEXTAREA' || 
+                         activeElement.isContentEditable;
+  if (!isInputElement) return;
+  
+  // 排除密码框、文件选择框、隐藏输入框
+  if (activeElement.type === 'password' || 
+      activeElement.type === 'file' || 
+      activeElement.type === 'hidden') {
+    return;
+  }
+  
   // 如果输入框正在输入，不拦截（让用户正常输入）
-  if (e.target !== currentFocusedInput) return;
+  // 检查是否有选中文本，如果有选中文本则不拦截
+  const selection = window.getSelection();
+  if (selection && selection.toString().length > 0) {
+    return;
+  }
+  
+  // 对于 contenteditable 元素，检查是否是大型文档容器
+  // 使用追加方案后，可以更宽松地处理，但仍需避免在大型文档中误触发
+  if (activeElement.isContentEditable) {
+    const currentContent = activeElement.innerText || activeElement.textContent || '';
+    
+    // 如果已有大量内容（超过5000个字符），可能是整个文档，不处理
+    // 阈值提高，因为现在使用追加方案，不会替换内容
+    if (currentContent.trim().length > 5000) {
+      return;
+    }
+  }
+  
+  // 更新当前焦点输入框
+  currentFocusedInput = activeElement;
   
   // 检查剪贴板功能是否启用
   checkClipboardEnabled(async () => {

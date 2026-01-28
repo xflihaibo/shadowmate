@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (changes.browsingData) {
         loadDashboardData();
       }
-      if (changes.clipboardHistory) {
+      if (changes.clipboardHistory || changes.clipboardEnabled) {
         loadClipboardHistory();
       }
     }
@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initSettings() {
   const settings = await chrome.storage.local.get({ 
     sunsetTime: '18:00',
-    isEnabled: true 
+    isEnabled: true,
+    clipboardEnabled: true  // 剪贴板功能默认开启
   });
   
   // 初始化时间
@@ -31,7 +32,7 @@ async function initSettings() {
     await chrome.storage.local.set({ sunsetTime: e.target.value });
   });
 
-  // 初始化开关
+  // 初始化主开关
   const masterSwitch = document.getElementById('master-switch');
   masterSwitch.checked = settings.isEnabled;
   masterSwitch.addEventListener('change', async (e) => {
@@ -43,6 +44,25 @@ async function initSettings() {
         chrome.tabs.sendMessage(tab.id, { type: 'STATE_CHANGED', isEnabled }).catch(()=>{});
       });
     });
+  });
+
+  // 初始化剪贴板开关
+  const clipboardSwitch = document.getElementById('clipboard-switch');
+  clipboardSwitch.checked = settings.clipboardEnabled !== false; // 默认 true
+  clipboardSwitch.addEventListener('change', async (e) => {
+    const clipboardEnabled = e.target.checked;
+    await chrome.storage.local.set({ clipboardEnabled });
+    // 通知所有页面剪贴板功能状态改变
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { type: 'CLIPBOARD_STATE_CHANGED', clipboardEnabled }).catch(()=>{});
+      });
+    });
+    // 如果关闭，可以选择清空历史（可选）
+    // if (!clipboardEnabled) {
+    //   await chrome.storage.local.set({ clipboardHistory: [] });
+    //   loadClipboardHistory();
+    // }
   });
 }
 
@@ -188,7 +208,17 @@ function getDomain(urlStr) {
 // 剪贴板历史管理
 async function loadClipboardHistory() {
   try {
-    const result = await chrome.storage.local.get({ clipboardHistory: [] });
+    const result = await chrome.storage.local.get({ 
+      clipboardHistory: [],
+      clipboardEnabled: true 
+    });
+    
+    // 如果剪贴板功能关闭，显示提示
+    if (result.clipboardEnabled === false) {
+      renderClipboardHistory([], true);
+      return;
+    }
+    
     const history = result.clipboardHistory || [];
     renderClipboardHistory(history);
   } catch (e) {
@@ -196,8 +226,14 @@ async function loadClipboardHistory() {
   }
 }
 
-function renderClipboardHistory(history) {
+function renderClipboardHistory(history, isDisabled = false) {
   const clipboardList = document.getElementById('clipboard-list');
+  
+  // 如果功能已关闭
+  if (isDisabled) {
+    clipboardList.innerHTML = '<div class="clipboard-empty">剪贴板功能已关闭</div>';
+    return;
+  }
   
   if (!history || history.length === 0) {
     clipboardList.innerHTML = '<div class="clipboard-empty">暂无复制记录</div>';

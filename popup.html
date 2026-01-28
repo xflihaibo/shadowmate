@@ -72,6 +72,29 @@
     input:checked + .slider { background-color: #2ecc71; }
     input:checked + .slider:before { transform: translateX(16px); }
 
+    /* 剪贴板开关样式（更小更精致） */
+    .clipboard-switch {
+      width: 32px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    .clipboard-switch .slider {
+      background-color: #ddd;
+      border-radius: 18px;
+    }
+    .clipboard-switch .slider:before {
+      height: 12px;
+      width: 12px;
+      left: 3px;
+      bottom: 3px;
+    }
+    .clipboard-switch input:checked + .slider {
+      background-color: #2ecc71;
+    }
+    .clipboard-switch input:checked + .slider:before {
+      transform: translateX(14px);
+    }
+
     /* Stats Summary */
     .stats-container {
       display: grid;
@@ -119,6 +142,7 @@
       color: #333;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 6px;
     }
 
@@ -357,7 +381,15 @@
 
   <!-- 剪贴板历史管理 -->
   <div class="clipboard-section">
-    <div class="clipboard-title">复制历史</div>
+    <div class="clipboard-title">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span>复制历史</span>
+      </div>
+      <label class="switch clipboard-switch" style="margin: 0;">
+        <input type="checkbox" id="clipboard-switch" checked>
+        <span class="slider round"></span>
+      </label>
+    </div>
     <div class="clipboard-list" id="clipboard-list">
       <div class="clipboard-empty">暂无复制记录</div>
     </div>

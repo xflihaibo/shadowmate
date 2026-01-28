@@ -156,7 +156,7 @@ async function saveClipboardText(text) {
 // 监听复制事件（浏览器内复制）
 document.addEventListener('copy', async (e) => {
   if (!isContextValid()) return;
-  checkEnabled(async () => {
+  checkClipboardEnabled(async () => {
     try {
       let copiedText = '';
       
@@ -186,7 +186,7 @@ let lastPasteTime = 0;
 // 监听粘贴事件（从外部应用复制的内容会在粘贴时进入浏览器）
 document.addEventListener('paste', async (e) => {
   if (!isContextValid()) return;
-  checkEnabled(async () => {
+  checkClipboardEnabled(async () => {
     try {
       lastPasteTime = Date.now();
       
@@ -221,7 +221,7 @@ document.addEventListener('paste', async (e) => {
 // 监听输入框的 input 事件，检测粘贴操作（补充方案）
 document.addEventListener('input', async (e) => {
   if (!isContextValid()) return;
-  checkEnabled(async () => {
+  checkClipboardEnabled(async () => {
     try {
       const target = e.target;
       
@@ -294,7 +294,7 @@ async function checkClipboardContent() {
 // 当页面获得焦点时，检查一次剪贴板内容
 window.addEventListener('focus', async () => {
   if (!isContextValid()) return;
-  checkEnabled(async () => {
+  checkClipboardEnabled(async () => {
     // 延迟检查，确保页面完全加载
     setTimeout(() => {
       checkClipboardContent();
@@ -401,31 +401,27 @@ document.addEventListener('focusin', async (e) => {
     }
     
     currentFocusedInput = target;
+    currentClipboardIndex = -1; // 初始化为 -1，表示还未填充
     
-    // 检查剪贴板内容（捕获从外部应用复制的内容）
-    try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        const clipboardText = await navigator.clipboard.readText();
-        if (clipboardText && clipboardText.trim().length > 0) {
-          console.log('伴影：输入框获得焦点时检测到剪贴板内容', clipboardText.substring(0, 30) + '...');
-          await saveClipboardText(clipboardText);
+    // 检查剪贴板功能是否启用
+    checkClipboardEnabled(async () => {
+      // 检查剪贴板内容（捕获从外部应用复制的内容）
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const clipboardText = await navigator.clipboard.readText();
+          if (clipboardText && clipboardText.trim().length > 0) {
+            console.log('伴影：输入框获得焦点时检测到剪贴板内容', clipboardText.substring(0, 30) + '...');
+            await saveClipboardText(clipboardText);
+          }
         }
+      } catch (clipError) {
+        // Clipboard API 可能因为权限问题失败，这是正常的
+        console.log('伴影：无法读取剪贴板（可能需要用户交互）');
       }
-    } catch (clipError) {
-      // Clipboard API 可能因为权限问题失败，这是正常的
-      console.log('伴影：无法读取剪贴板（可能需要用户交互）');
-    }
-    
-    // 加载剪贴板历史
-    await loadClipboardHistory();
-    
-    // 如果有剪贴板历史，自动填充最近的一条
-    if (clipboardHistory.length > 0) {
-      currentClipboardIndex = 0;
-      fillInput(target, clipboardHistory[0].text);
-    } else {
-      currentClipboardIndex = -1;
-    }
+      
+      // 只加载剪贴板历史，不自动填充
+      await loadClipboardHistory();
+    });
   });
 }, true);
 
@@ -448,36 +444,51 @@ document.addEventListener('keydown', async (e) => {
   // 如果输入框正在输入，不拦截（让用户正常输入）
   if (e.target !== currentFocusedInput) return;
   
-  await loadClipboardHistory();
-  
-  if (clipboardHistory.length === 0) return;
-  
-  // 阻止默认行为
-  e.preventDefault();
-  e.stopPropagation();
-  
-  if (e.key === 'ArrowUp') {
-    // 向上切换（更早的记录）
-    if (currentClipboardIndex < clipboardHistory.length - 1) {
-      currentClipboardIndex++;
-    } else {
-      // 循环到第一条
-      currentClipboardIndex = 0;
+  // 检查剪贴板功能是否启用
+  checkClipboardEnabled(async () => {
+    await loadClipboardHistory();
+    
+    if (clipboardHistory.length === 0) return;
+    
+    // 阻止默认行为
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.key === 'ArrowUp') {
+      // 上箭头键
+      if (currentClipboardIndex === -1) {
+        // 如果还未填充，填充最近的一条（索引 0）
+        currentClipboardIndex = 0;
+      } else {
+        // 如果已经填充，切换到更早的记录
+        if (currentClipboardIndex < clipboardHistory.length - 1) {
+          currentClipboardIndex++;
+        } else {
+          // 循环到第一条
+          currentClipboardIndex = 0;
+        }
+      }
+    } else if (e.key === 'ArrowDown') {
+      // 下箭头键
+      if (currentClipboardIndex === -1) {
+        // 如果还未填充，填充最近的一条（索引 0）
+        currentClipboardIndex = 0;
+      } else {
+        // 如果已经填充，切换到更新的记录
+        if (currentClipboardIndex > 0) {
+          currentClipboardIndex--;
+        } else {
+          // 循环到最后一条
+          currentClipboardIndex = clipboardHistory.length - 1;
+        }
+      }
     }
-  } else if (e.key === 'ArrowDown') {
-    // 向下切换（更新的记录）
-    if (currentClipboardIndex > 0) {
-      currentClipboardIndex--;
-    } else {
-      // 循环到最后一条
-      currentClipboardIndex = clipboardHistory.length - 1;
+    
+    // 填充选中的内容
+    if (currentClipboardIndex >= 0 && currentClipboardIndex < clipboardHistory.length) {
+      fillInput(currentFocusedInput, clipboardHistory[currentClipboardIndex].text);
     }
-  }
-  
-  // 填充选中的内容
-  if (currentClipboardIndex >= 0 && currentClipboardIndex < clipboardHistory.length) {
-    fillInput(currentFocusedInput, clipboardHistory[currentClipboardIndex].text);
-  }
+  });
 }, true);
 
 // 页面加载时加载剪贴板历史
@@ -498,6 +509,20 @@ function checkEnabled(callback) {
     chrome.storage.local.get({ isEnabled: true }, (res) => {
       if (chrome.runtime.lastError) return;
       if (res && res.isEnabled && callback) callback();
+    });
+  } catch (e) {}
+}
+
+// 检查剪贴板功能是否启用
+function checkClipboardEnabled(callback) {
+  if (!isContextValid()) return;
+  try {
+    chrome.storage.local.get({ clipboardEnabled: true, isEnabled: true }, (res) => {
+      if (chrome.runtime.lastError) return;
+      // 需要主开关和剪贴板开关都开启
+      if (res && res.isEnabled && res.clipboardEnabled !== false && callback) {
+        callback();
+      }
     });
   } catch (e) {}
 }
@@ -640,6 +665,18 @@ if (isContextValid()) {
         document.querySelectorAll('.shadow-mate-ghost, .shadow-mate-card').forEach(el => el.remove());
       } else {
         updateGoldenHourEffect(); checkTimeAndShow();
+      }
+    } else if (message.type === 'CLIPBOARD_STATE_CHANGED') {
+      // 剪贴板功能状态改变
+      if (!message.clipboardEnabled) {
+        // 如果关闭，清空当前输入框的自动填充状态和预览
+        if (currentFocusedInput) {
+          // 如果输入框有自动填充的内容，可以选择清空（可选）
+          // 这里我们只清空状态，不清空输入框内容，让用户决定
+        }
+        currentFocusedInput = null;
+        currentClipboardIndex = -1;
+        hidePreview();
       }
     }
   });

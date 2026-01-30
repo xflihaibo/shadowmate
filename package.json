@@ -1,10 +1,24 @@
 {
   "name": "shadow-mate",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "伴影 (Shadow Mate) - 静默陪伴你的数字生活，在归航时刻送上温馨总结",
+  "type": "module",
   "scripts": {
-    "build": "node build.js",
-    "validate": "node build.js --validate"
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.23",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "pngjs": "^7.0.0",
+    "typescript": "~5.4.0",
+    "vite": "^5.2.0",
+    "vue-tsc": "^2.0.6"
   },
   "keywords": [
     "chrome-extension",

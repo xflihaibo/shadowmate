@@ -1,2 +1,15 @@
 # OpenMemory - IDE/Assistant specific rules
 .cursor/rules/openmemory.mdc
+
+# Vite / build
+dist/
+*.local
+.vite/
+
+# Dependencies
+node_modules/
+
+# IDE
+.idea/
+*.log
+.DS_Store

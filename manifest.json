@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "伴影 (Shadow Mate): Daily Web Journal & Recap",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "Your silent web companion. Captures your digital journey and provides a warm, thoughtful summary when your day is done.",
   "permissions": ["storage", "alarms", "tabs", "activeTab", "scripting", "webNavigation", "clipboardRead"],
   "host_permissions": ["<all_urls>"],

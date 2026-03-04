@@ -1,5 +1,18 @@
 // Content Script for 伴影 (Shadow Mate)
-console.log('伴影 (Shadow Mate) 的影子正在静默守护...')
+import { getEffectiveLocale, t } from './i18n'
+import zh from './locales/zh.json'
+import en from './locales/en.json'
+
+type Locale = 'zh' | 'en'
+function getMessages(locale: Locale): Record<string, unknown> {
+  return locale === 'zh' ? (zh as Record<string, unknown>) : (en as Record<string, unknown>)
+}
+function getFallback(locale: Locale): Record<string, unknown> {
+  return locale === 'zh' ? (en as Record<string, unknown>) : (zh as Record<string, unknown>)
+}
+function msg(messages: Record<string, unknown>, locale: Locale, key: string, placeholders?: Record<string, string | number>) {
+  return t(messages, key, { placeholders, fallbackMessages: getFallback(locale) })
+}
 
 interface PageStats {
   clicks: number
@@ -412,6 +425,7 @@ document.addEventListener(
   'keydown',
   async (e: KeyboardEvent) => {
     if (!isContextValid() || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    if (window.location.href.includes('feishu.cn')) return
     const activeElement = document.activeElement as HTMLElement & { isContentEditable?: boolean; innerText?: string; type?: string } | null
     if (!activeElement) return
     const isInput =
@@ -574,7 +588,7 @@ async function updateGoldenHourEffect() {
       overlay.style.background = `rgba(255, 140, 0, ${progress * 0.05})`
       if (!document.querySelector('.shadow-mate-ghost')) {
         injectStyles()
-        createGhostUI(null)
+        createGhostUI(null).catch(() => {})
       }
       const ghost = document.querySelector('.shadow-mate-ghost')
       if (ghost) {
@@ -657,12 +671,17 @@ async function checkTimeAndShow() {
 async function showMemoryGhost(memory: { visitTime?: number; charsTyped?: number }) {
   if (!isContextValid()) return
   if (await checkGhostClosed()) return
-  const msg = `嗨，我们在 ${new Date(memory.visitTime!).toLocaleDateString()} 见过。当时你在这里留下了 ${memory.charsTyped ?? 0} 个字，思考得真认真呢。✨`
+  const locale = await getEffectiveLocale()
+  const messages = getMessages(locale)
+  const dateStr = new Date(memory.visitTime!).toLocaleDateString()
+  const count = memory.charsTyped ?? 0
+  const bubbleText = msg(messages, locale, 'content.timeCapsule', { date: dateStr, count })
+  const goodbyeTitle = msg(messages, locale, 'content.goodbye')
   injectStyles()
   const ghost = document.createElement('div')
   ghost.className = 'shadow-mate-ghost active'
   ghost.style.bottom = '120px'
-  ghost.innerHTML = `<div class="shadow-mate-ghost-close" title="再见">×</div><div class="shadow-mate-bubble" style="opacity:1; transform:translateY(0) scale(1);">${msg}</div><span class="shadow-mate-ghost-icon-wrap"><img src="${ghostGifUrl}" class="shadow-mate-ghost-icon" alt=""></span>`
+  ghost.innerHTML = `<div class="shadow-mate-ghost-close" title="${goodbyeTitle}">×</div><div class="shadow-mate-bubble" style="opacity:1; transform:translateY(0) scale(1);">${bubbleText}</div><span class="shadow-mate-ghost-icon-wrap"><img src="${ghostGifUrl}" class="shadow-mate-ghost-icon" alt=""></span>`
   document.body.appendChild(ghost)
   ghost.addEventListener('click', (e: Event) => {
     if ((e.target as HTMLElement).classList.contains('shadow-mate-ghost-close')) {
@@ -700,7 +719,7 @@ async function showSunsetRitual(force = false) {
   const fn = showSunsetRitual as typeof showSunsetRitual & { isFetching?: boolean }
   if (fn.isFetching) return
   fn.isFetching = true
-  safeSendMessage({ type: 'GET_TODAY_SUMMARY' }, (summary: TodaySummary | null) => {
+  safeSendMessage({ type: 'GET_TODAY_SUMMARY' }, async (summary: TodaySummary | null) => {
     fn.isFetching = false
     if (!summary || !isContextValid()) return
     if (!force) chrome.storage.local.set({ lastRitualDate: new Date().toDateString() })
@@ -711,7 +730,7 @@ async function showSunsetRitual(force = false) {
     const toneIndex = getDailyToneIndex(todayStr, 3)
     const tones: NarrativeTone[] = ['warm', 'poetic', 'cute']
     const tone = tones[toneIndex]
-    createGhostUI(summary, tone)
+    await createGhostUI(summary, tone)
     const ghost = document.querySelector('.shadow-mate-ghost')
     if (ghost) {
       ghost.setAttribute('data-ritual', 'true')
@@ -765,16 +784,14 @@ function injectStyles() {
   document.head.appendChild(style)
 }
 
-function getWarmGreeting(summary: TodaySummary | null): string {
-  if (!summary) return '余晖升起，离归航不远了...'
-  const pool = [
-    `今日辛苦啦！敲击了 ${summary.totalChars} 个字，休息一下吧 ✨`,
-    '伴影提醒：金色时刻到了，该下班了 ✨',
-    '夕阳很美，别让屏幕遮住了你的眼睛 🌇',
-    '影子守望者提醒：工作是做不完的，休息可以现在开始。',
-    '代码写不完，快乐可以自己找，下班啦！'
-  ]
-  return pool[Math.floor(Math.random() * pool.length)]
+function getWarmGreeting(summary: TodaySummary | null, messages: Record<string, unknown>, locale: Locale): string {
+  if (!summary) return msg(messages, locale, 'content.goldenHour.noSummary')
+  const content = messages.content as Record<string, unknown>
+  const goldenHour = content?.goldenHour as { lines?: string[] } | undefined
+  const pool = goldenHour?.lines ?? []
+  if (pool.length === 0) return msg(messages, locale, 'content.goldenHour.noSummary')
+  const raw = pool[Math.floor(Math.random() * pool.length)]
+  return raw.replace(/\{chars\}/g, String(summary.totalChars))
 }
 
 type NarrativeTone = 'warm' | 'poetic' | 'cute'
@@ -788,41 +805,37 @@ function getDailyToneIndex(seed: string, length: number): number {
   return Math.abs(hash) % length
 }
 
-function generateShadowNarrative(summary: TodaySummary, tone: NarrativeTone = 'warm'): string {
+function generateShadowNarrative(summary: TodaySummary, tone: NarrativeTone, messages: Record<string, unknown>, locale: Locale): string {
   const { mainCategory, topSiteTitle, totalDuration, totalChars, totalClicks, totalScroll, peakHour } = summary
   const hours = Math.round((totalDuration / 3600) * 10) / 10
   const scrollMeters = Math.round(totalScroll / 1000)
-  const categoryNames: Record<string, string> = {
-    work: '航行在代码海洋',
-    study: '漫步在知识森林',
-    social: '在数字广场交汇',
-    video: '驻足在光影之间',
-    other: '静静探索角落'
+  const content = messages.content as Record<string, unknown>
+  const categoryNames = (content?.categoryNames as Record<string, string>) ?? {}
+  const categoryCute = (content?.categoryCute as Record<string, string>) ?? {}
+  const cat = categoryNames[mainCategory] ?? (content?.categoryDefault as string) ?? ''
+  const catCute = categoryCute[mainCategory] ?? (content?.categoryCuteDefault as string) ?? ''
+  const placeholders = {
+    category: cat,
+    categoryCute: catCute,
+    site: topSiteTitle,
+    chars: totalChars,
+    clicks: totalClicks,
+    scroll: scrollMeters,
+    peakHour,
+    hours
   }
-  const categoryCute: Record<string, string> = {
-    work: '在代码海里扑腾',
-    study: '在知识森林里溜达',
-    social: '在广场上和大家唠嗑',
-    video: '在光影里发呆',
-    other: '在角落里摸鱼'
-  }
-  const cat = categoryNames[mainCategory] ?? '度过了充实的一天'
-  const catCute = categoryCute[mainCategory] ?? '到处逛逛'
-
-  if (tone === 'poetic') {
-    return `今日你 ${cat}，在 ${topSiteTitle} 停泊最久。指尖落下 ${totalChars} 粒字、${totalClicks} 次轻触、${scrollMeters} 米行路。灵魂在 ${peakHour} 点最亮。共 ${hours} 小时，与数字共处。`
-  }
-  if (tone === 'cute') {
-    return `今天你 ${catCute}～在 ${topSiteTitle} 待得最久啦。敲了 ${totalChars} 个字、点了 ${totalClicks} 下、滚了 ${scrollMeters} 米，${peakHour} 点最精神！一共陪了数字世界 ${hours} 小时呢，辛苦啦 ✨`
-  }
-  return `今天，你 ${cat}。你似乎在 ${topSiteTitle} 停留了很久，留下了深刻的足迹。你敲下了 ${totalChars} 个思考的碎片，指尖在屏幕上轻快地跳了 ${totalClicks} 次舞，并在数字的峰峦间翻越了 ${scrollMeters} 米。在 ${peakHour}点 左右，是你灵魂最活跃的时刻。你在数字世界已经停留了 ${hours} 小时。`
+  if (tone === 'poetic') return msg(messages, locale, 'content.narrativePoetic', placeholders)
+  if (tone === 'cute') return msg(messages, locale, 'content.narrativeCute', placeholders)
+  return msg(messages, locale, 'content.narrativeWarm', placeholders)
 }
 
-function createGhostUI(summary: TodaySummary | null, tone: NarrativeTone = 'warm') {
+async function createGhostUI(summary: TodaySummary | null, tone: NarrativeTone = 'warm') {
   if (!isContextValid()) return
+  const locale = await getEffectiveLocale()
+  const messages = getMessages(locale)
+  const greeting = getWarmGreeting(summary, messages, locale)
   const ghost = document.createElement('div')
   ghost.className = 'shadow-mate-ghost'
-  const greeting = getWarmGreeting(summary)
   ghost.innerHTML = `<div class="shadow-mate-ghost-close">×</div><div class="shadow-mate-bubble">${greeting}</div><span class="shadow-mate-ghost-icon-wrap"><img src="${ghostGifUrl}" class="shadow-mate-ghost-icon" alt=""></span>`
   document.body.appendChild(ghost)
   const ghostClose = ghost.querySelector('.shadow-mate-ghost-close')
@@ -840,22 +853,37 @@ function createGhostUI(summary: TodaySummary | null, tone: NarrativeTone = 'warm
     document.getElementById('shadow-mate-sunset-overlay')?.remove()
   })
   if (summary) {
-    const narrative = generateShadowNarrative(summary, tone)
+    const narrative = generateShadowNarrative(summary, tone, messages, locale)
+    const cardTitle = msg(messages, locale, 'content.cardTitle')
+    const statActive = msg(messages, locale, 'content.statActiveTime')
+    const statClicks = msg(messages, locale, 'content.statClicks')
+    const statScroll = msg(messages, locale, 'content.statScroll')
+    const statChars = msg(messages, locale, 'content.statChars')
+    const minutes = msg(messages, locale, 'content.minutes')
+    const times = msg(messages, locale, 'content.times')
+    const meters = msg(messages, locale, 'content.meters')
+    const timelineLabel = msg(messages, locale, 'content.timelineLabel')
+    const periodMorning = msg(messages, locale, 'content.periodMorning')
+    const periodAfternoon = msg(messages, locale, 'content.periodAfternoon')
+    const periodEvening = msg(messages, locale, 'content.periodEvening')
+    const timelineEmpty = msg(messages, locale, 'content.timelineEmpty')
+    const keywordsLabel = msg(messages, locale, 'content.keywordsLabel')
+    const cardFooter = msg(messages, locale, 'content.cardFooter')
+    const periodNames: Record<string, string> = { morning: periodMorning, afternoon: periodAfternoon, evening: periodEvening }
     const card = document.createElement('div')
     card.className = 'shadow-mate-card'
-    const periodNames: Record<string, string> = { morning: '上午', afternoon: '下午', evening: '傍晚' }
     card.innerHTML = `
       <div class="shadow-mate-card-close">×</div>
-      <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #f39c12;">伴影 · 私语</h3>
+      <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #f39c12;">${cardTitle}</h3>
       <div class="shadow-mate-narrative">"${narrative}"</div>
       <div class="shadow-mate-stats-grid">
-        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">活跃时长</span><span class="shadow-mate-stat-value">${Math.round(summary.totalDuration / 60)} 分钟</span></div>
-        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">点击频率</span><span class="shadow-mate-stat-value">${summary.totalClicks} 次</span></div>
-        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">滚动距离</span><span class="shadow-mate-stat-value">${Math.round(summary.totalScroll / 1000)} 米</span></div>
-        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">键入文字</span><span class="shadow-mate-stat-value">${summary.totalChars} 个</span></div>
+        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">${statActive}</span><span class="shadow-mate-stat-value">${Math.round(summary.totalDuration / 60)}${minutes}</span></div>
+        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">${statClicks}</span><span class="shadow-mate-stat-value">${summary.totalClicks}${times}</span></div>
+        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">${statScroll}</span><span class="shadow-mate-stat-value">${Math.round(summary.totalScroll / 1000)}${meters}</span></div>
+        <div class="shadow-mate-stat-box"><span class="shadow-mate-stat-label">${statChars}</span><span class="shadow-mate-stat-value">${summary.totalChars}</span></div>
       </div>
       <div class="shadow-mate-timeline">
-        <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #666;">今日轨迹时间轴</div>
+        <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #666;">${timelineLabel}</div>
         ${['morning', 'afternoon', 'evening'].map((period) => {
           const tags = summary.timeline[period as keyof typeof summary.timeline]
           const periodName = periodNames[period]
@@ -863,18 +891,18 @@ function createGhostUI(summary: TodaySummary | null, tone: NarrativeTone = 'warm
             <div class="shadow-mate-timeline-item ${tags.length > 0 ? 'active' : ''}">
               <div class="shadow-mate-timeline-time">${periodName}</div>
               <div class="shadow-mate-timeline-content">
-                <div class="shadow-mate-timeline-tags">${tags.length > 0 ? tags.join(' · ') : '静候开启...'}</div>
+                <div class="shadow-mate-timeline-tags">${tags.length > 0 ? tags.join(' · ') : timelineEmpty}</div>
               </div>
             </div>
           `
         }).join('')}
       </div>
-      <div style="font-size: 12px; font-weight: bold; margin-top: 20px; color: #666;">今日关键词</div>
+      <div style="font-size: 12px; font-weight: bold; margin-top: 20px; color: #666;">${keywordsLabel}</div>
       <div class="shadow-mate-keywords">
         ${summary.keywords.map((k) => `<span class="shadow-mate-keyword">${k}</span>`).join('')}
       </div>
       <div style="margin-top:25px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 15px;">
-        —— 辛苦了，现在的你值得被温柔对待 ✨
+        ${cardFooter}
       </div>
     `
     document.body.appendChild(card)

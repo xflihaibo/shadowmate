@@ -1,7 +1,20 @@
 /**
  * 伴影 · 互动语句库（诗句 / 冷知识 / 温暖话）
  * 按日期与次数动态轮换，保证每次打开都有变化。
+ * 支持传入 locale 的 interaction 对象以做多语言。
  */
+
+export type InteractionMessages = {
+  poetry: string[]
+  coldKnowledge: string[]
+  warmMorning: string[]
+  warmNoon: string[]
+  warmAfternoon: string[]
+  warmEvening: string[]
+  warmNight: string[]
+  weekdayNames: string[]
+  overLimit: string[]
+}
 
 function getDailyIndex(seed: string, arrayLength: number): number {
   let hash = 0
@@ -206,29 +219,44 @@ export const OVER_LIMIT_MESSAGES = [
 
 export type InteractionType = 'poetry' | 'cold' | 'warm'
 
-export function getInteractionContent(seedBase: string): { type: InteractionType; text: string } {
+function getWarmPoolFromInteraction(hour: number, interaction: InteractionMessages): string[] {
+  if (hour >= 5 && hour < 12) return interaction.warmMorning
+  if (hour >= 12 && hour < 15) return interaction.warmNoon
+  if (hour >= 15 && hour < 18) return interaction.warmAfternoon
+  if (hour >= 18 && hour < 22) return interaction.warmEvening
+  return interaction.warmNight
+}
+
+export function getInteractionContent(
+  seedBase: string,
+  interaction?: InteractionMessages
+): { type: InteractionType; text: string } {
+  const poetry = interaction?.poetry ?? POETRY
+  const coldKnowledge = interaction?.coldKnowledge ?? COLD_KNOWLEDGE
   const typeIndex = getDailyIndex(seedBase, 3)
   const types: InteractionType[] = ['poetry', 'cold', 'warm']
   const type = types[typeIndex]
 
   if (type === 'poetry') {
-    const text = POETRY[getDailyIndex(seedBase + 'p', POETRY.length)]
+    const text = poetry[getDailyIndex(seedBase + 'p', poetry.length)]
     return { type: 'poetry', text }
   }
   if (type === 'cold') {
-    const text = COLD_KNOWLEDGE[getDailyIndex(seedBase + 'c', COLD_KNOWLEDGE.length)]
+    const text = coldKnowledge[getDailyIndex(seedBase + 'c', coldKnowledge.length)]
     return { type: 'cold', text }
   }
   const now = new Date()
   const weekday = now.getDay()
   const hour = now.getHours()
-  const pool = getWarmPool(hour)
+  const pool = interaction ? getWarmPoolFromInteraction(hour, interaction) : getWarmPool(hour)
+  const weekdayNames = interaction?.weekdayNames ?? WEEKDAY_NAMES
   const seed = seedBase + 'w' + weekday + hour
   const text = pool[getDailyIndex(seed, pool.length)]
-  const dayName = WEEKDAY_NAMES[weekday]
+  const dayName = weekdayNames[weekday]
   return { type: 'warm', text: `【${dayName}】${text}` }
 }
 
-export function getOverLimitMessage(seed: string): string {
-  return OVER_LIMIT_MESSAGES[getDailyIndex(seed, OVER_LIMIT_MESSAGES.length)]
+export function getOverLimitMessage(seed: string, interaction?: { overLimit: string[] }): string {
+  const list = interaction?.overLimit ?? OVER_LIMIT_MESSAGES
+  return list[getDailyIndex(seed, list.length)]
 }

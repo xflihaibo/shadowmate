@@ -10,7 +10,7 @@
       </div>
       <div class="header-sub">
         <div class="milestone-inline">
-          <span class="milestone-inline-days">{{ companionDays }} 天</span>
+          <span class="milestone-inline-days">{{ companionDays }}{{ tKey('popup.days') }}</span>
           <template v-if="currentMilestone">
             <span class="milestone-inline-badge" :title="currentMilestone.label">
               <span class="milestone-inline-icon" aria-hidden="true">
@@ -25,7 +25,7 @@
             </span>
           </template>
         </div>
-        <p class="daily-quote clickable-title" @click="onSubtitleClick" title="点击找到伴影">{{ dailyQuote }}</p>
+        <p class="daily-quote clickable-title" @click="onSubtitleClick" :title="tKey('popup.clickFindMe')">{{ dailyQuote }}</p>
       </div>
     </header>
 
@@ -36,8 +36,8 @@
         type="button"
         class="floating-find-me"
         @click="onFloatingFindMeClick"
-        aria-label="找到伴影"
-        title="找到伴影"
+        :aria-label="tKey('popup.findMe')"
+        :title="tKey('popup.findMe')"
       >
         <template v-if="!useGhostEmojiFallback">
           <img class="floating-find-me-icon floating-find-me-icon-img" :src="floatingGhostUrl" alt="" @error="useGhostEmojiFallback = true" />
@@ -52,7 +52,7 @@
           {{ morningGreetingText }}
         </div>
         <div class="morning-greeting-ghost">
-          <button type="button" class="morning-greeting-close" aria-label="关闭" @click="dismissMorningGreeting">×</button>
+          <button type="button" class="morning-greeting-close" :aria-label="tKey('popup.close')" @click="dismissMorningGreeting">×</button>
           <template v-if="!useGhostEmojiFallback">
             <img class="morning-greeting-icon morning-greeting-icon-img" :src="floatingGhostUrl" alt="" @error="useGhostEmojiFallback = true" />
           </template>
@@ -62,39 +62,39 @@
     </Transition>
 
     <div class="stats-container">
-      <div class="stat-card" title="活跃时长">
+      <div class="stat-card" :title="tKey('popup.stats.activeTime')">
         <span class="stat-icon">⏱️</span>
         <span class="stat-value">{{ todayDuration }}</span>
-        <span class="stat-label">活跃时长</span>
+        <span class="stat-label">{{ tKey('popup.stats.activeTime') }}</span>
       </div>
-      <div class="stat-card" title="累计点击">
+      <div class="stat-card" :title="tKey('popup.stats.clicks')">
         <span class="stat-icon">🖱️</span>
         <span class="stat-value">{{ todayClicks }}</span>
-        <span class="stat-label">累计点击</span>
+        <span class="stat-label">{{ tKey('popup.stats.clicks') }}</span>
       </div>
-      <div class="stat-card" title="滚动距离">
+      <div class="stat-card" :title="tKey('popup.stats.scroll')">
         <span class="stat-icon">📏</span>
         <span class="stat-value">{{ todayScroll }}</span>
-        <span class="stat-label">滚动距离</span>
+        <span class="stat-label">{{ tKey('popup.stats.scroll') }}</span>
       </div>
-      <div class="stat-card" title="敲击字数">
+      <div class="stat-card" :title="tKey('popup.stats.chars')">
         <span class="stat-icon">⌨️</span>
         <span class="stat-value">{{ todayChars }}</span>
-        <span class="stat-label">敲击字数</span>
+        <span class="stat-label">{{ tKey('popup.stats.chars') }}</span>
       </div>
     </div>
 
     <section class="clipboard-section">
       <div class="clipboard-title">
         <div class="clipboard-title-left">
-          <span>复制历史</span>
+          <span>{{ tKey('popup.clipboard.title') }}</span>
           <span class="clipboard-title-info">({{ clipboardCount }}/10)</span>
           <button
             v-show="clipboardHistory.length > 0"
             class="clipboard-clear-all"
             @click="clearAllClipboard"
           >
-            清空
+            {{ tKey('popup.clipboard.clear') }}
           </button>
         </div>
         <label class="switch clipboard-switch">
@@ -103,8 +103,8 @@
         </label>
       </div>
       <div class="clipboard-list">
-        <div v-if="!clipboardEnabled" class="clipboard-empty">剪贴板功能已关闭</div>
-        <div v-else-if="clipboardHistory.length === 0" class="clipboard-empty">暂无复制记录</div>
+        <div v-if="!clipboardEnabled" class="clipboard-empty">{{ tKey('popup.clipboard.disabled') }}</div>
+        <div v-else-if="clipboardHistory.length === 0" class="clipboard-empty">{{ tKey('popup.clipboard.empty') }}</div>
         <div
           v-else
           v-for="(item, index) in clipboardHistory"
@@ -115,34 +115,31 @@
           <div class="clipboard-actions">
             <button
               class="clipboard-copy"
-              title="复制"
+              :title="tKey('popup.clipboard.copy')"
               @click="copyClipboardItem(item.text, $event)"
             >
               {{ copyBtnState === index ? '✓' : '⎘' }}
             </button>
-            <button class="clipboard-delete" title="删除" @click="deleteClipboardItem(index)">
+            <button class="clipboard-delete" :title="tKey('popup.clipboard.delete')" @click="deleteClipboardItem(index)">
               ×
             </button>
           </div>
         </div>
       </div>
-      <div v-if="clipboardEnabled && clipboardHistory.length > 0" class="clipboard-hint">
-        💡 提示：在输入框中按 <kbd class="clipboard-hint-key">↑</kbd> 或
-        <kbd class="clipboard-hint-key">↓</kbd> 键可切换复制历史
-      </div>
+      <div v-if="clipboardEnabled && clipboardHistory.length > 0" class="clipboard-hint">{{ tKey('popup.clipboard.hint') }}</div>
     </section>
 
     <section class="history-section">
       <div class="section-title">
         <div class="section-title-left">
-          <span>今日足迹 <small class="sites-count">({{ todaySitesCount }}个站点)</small></span>
+          <span>{{ tKey('popup.section.todaySites') }} <small class="sites-count">({{ todaySitesCount }}{{ tKey('popup.section.sitesCount') }})</small></span>
         </div>
-        <span class="section-badge">24h 滚动清理</span>
+        <span class="section-badge">{{ tKey('popup.section.badge24h') }}</span>
       </div>
 
       <div class="settings-block">
         <div class="settings-row">
-          <span>🌅 你的“归航时刻”</span>
+          <span>{{ tKey('popup.settings.sunsetLabel') }}</span>
           <input
             type="time"
             v-model="sunsetTime"
@@ -150,13 +147,13 @@
             class="sunset-time-input"
           />
         </div>
-        <p class="settings-hint">设置后，余晖模式将在该时间前 30 分钟开启</p>
+        <p class="settings-hint">{{ tKey('popup.settings.sunsetHint') }}</p>
       </div>
 
       <div class="history-list">
         <div v-if="loading" class="empty-state loading-state">
           <span class="empty-icon">⏳</span>
-          加载中...
+          {{ tKey('popup.loading') }}
         </div>
         <div v-else-if="loadError" class="empty-state error-state">
           <span class="empty-icon">⚠️</span>
@@ -164,17 +161,17 @@
         </div>
         <div v-else-if="todayData.length === 0" class="empty-state">
           <span class="empty-icon">⏳</span>
-          正在捕捉你的轨迹...
+          {{ tKey('popup.capturing') }}
         </div>
         <div v-else-if="sortedHistory.length === 0" class="empty-state">
-          今天还没留下足迹呢 👻
+          {{ tKey('popup.noFootprints') }}
         </div>
         <div
           v-else
           v-for="item in sortedHistory"
           :key="item.url + item.visitTime"
           class="history-item"
-          :title="`跳转至: ${item.url}`"
+          :title="tKey('popup.goto') + item.url"
           @click="openTab(item.url)"
         >
           <img
@@ -200,14 +197,28 @@
       <div class="debug-actions">
         <button class="btn-reset" @click="resetRitual">{{ resetBtnText }}</button>
       </div>
-      数据仅保存在本地 · 伴影静默守护中
+      <p class="footer-text">{{ tKey('popup.footer') }}</p>
+      <div class="footer-language">
+        <div class="language-pill" role="group" :aria-label="tKey('popup.language')">
+          <button
+            type="button"
+            :class="['language-pill-btn', { active: locale === 'zh' }]"
+            @click="setLocale('zh')"
+          >{{ tKey('popup.languageZh') }}</button>
+          <button
+            type="button"
+            :class="['language-pill-btn', { active: locale === 'en' }]"
+            @click="setLocale('en')"
+          >{{ tKey('popup.languageEn') }}</button>
+        </div>
+      </div>
     </footer>
 
     <Transition name="companion-pop">
       <div v-if="showInteractionBubble" class="interaction-bubble-wrap">
         <div class="interaction-bubble">
           <span class="interaction-bubble-text">{{ interactionMessage }}</span>
-          <button type="button" class="interaction-bubble-close" aria-label="关闭" @click="closeInteractionBubble">×</button>
+          <button type="button" class="interaction-bubble-close" :aria-label="tKey('popup.close')" @click="closeInteractionBubble">×</button>
         </div>
       </div>
     </Transition>
@@ -217,41 +228,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getInteractionContent, getOverLimitMessage } from './interactionLibrary'
+import { getEffectiveLocale, t, setLanguageOverride, getNested } from '../i18n'
+import type { Locale } from '../i18n'
+import zh from '../locales/zh.json'
+import en from '../locales/en.json'
 
-const MOTTOS = [
-  'Shadow Mate · 始终守护', 'Shadow Mate · 温柔陪伴', 'Shadow Mate · 静默记录',
-  'Shadow Mate · 数字归航', 'Shadow Mate · 时光见证', 'Shadow Mate · 温暖如初',
-  'Shadow Mate · 默默守护', 'Shadow Mate · 记录美好', 'Shadow Mate · 陪伴每一天',
-  'Shadow Mate · 温柔以待', 'Shadow Mate · 静候归航', 'Shadow Mate · 时光印记',
-  'Shadow Mate · 温暖守护', 'Shadow Mate · 记录足迹', 'Shadow Mate · 温柔如影',
-  'Shadow Mate · 静默陪伴', 'Shadow Mate · 数字记忆', 'Shadow Mate · 温暖如光',
-  'Shadow Mate · 默默记录', 'Shadow Mate · 温柔守护', 'Shadow Mate · 时光见证者',
-  'Shadow Mate · 温暖陪伴', 'Shadow Mate · 静候归来', 'Shadow Mate · 记录时光',
-  'Shadow Mate · 温柔如你', 'Shadow Mate · 默默陪伴', 'Shadow Mate · 数字守护',
-  'Shadow Mate · 温暖如影', 'Shadow Mate · 静默见证', 'Shadow Mate · 温柔记录'
-]
+const locale = ref<Locale>('zh')
+const messages = computed(() => (locale.value === 'zh' ? (zh as Record<string, unknown>) : (en as Record<string, unknown>)))
+const fallbackMessages = computed(() => (locale.value === 'zh' ? (en as Record<string, unknown>) : (zh as Record<string, unknown>)))
+function tKey(key: string, placeholders?: Record<string, string | number>) {
+  return t(messages.value, key, { placeholders, fallbackMessages: fallbackMessages.value })
+}
+function setLocale(l: Locale) {
+  setLanguageOverride(l)
+  locale.value = l
+  updateDailyMotto()
+  updateDailyQuote()
+  currentMilestone.value = getMilestoneForDays(companionDays.value)
+}
 
-const QUOTES = [
-  '每一天的努力，都是未来的自己', '温柔对待自己，也温柔对待世界',
-  '小小的坚持，会带来大大的改变', '今天的你，比昨天更好了',
-  '累了就休息，但不要放弃', '每一个瞬间，都值得被记录',
-  '慢慢来，比较快', '你值得被温柔对待', '生活很累，但也很美',
-  '今天的你，辛苦了', '做自己的光，照亮前路', '时间会见证你的成长',
-  '每一步都算数', '保持热爱，奔赴山海', '简单生活，温柔待人',
-  '今天的努力，是明天的底气', '累了就停一停，但别忘记前行',
-  '你比自己想象的更强大', '每一个今天，都是新的开始', '慢慢来，一切都会好的',
-  '生活不易，但你很勇敢', '今天的你，值得被表扬', '保持初心，继续前行',
-  '每一天都是新的机会', '温柔的力量，最强大', '你正在成为更好的自己',
-  '累了就休息，但别停下', '今天的努力，不会白费', '保持微笑，继续前行',
-  '你值得拥有美好的一切', '慢慢来，时间会给你答案', '今天的你，很棒',
-  '保持热爱，保持前行', '每一个努力，都有意义', '生活很苦，但你很甜',
-  '今天的你，比昨天更优秀', '保持初心，温柔前行', '每一天都是新的起点',
-  '你正在闪闪发光', '今天的坚持，是明天的收获', '保持微笑，生活会更美好',
-  '你值得被爱，也值得被珍惜', '慢慢来，一切都会如你所愿',
-  '今天的你，辛苦了，但很值得', '保持热爱，生活会给你惊喜',
-  '每一个瞬间，都是珍贵的', '你比自己想象的更优秀', '今天的努力，会开出花来',
-  '保持初心，温柔对待自己'
-]
+function getArray(key: string): string[] {
+  const arr = getNested(messages.value, key)
+  return Array.isArray(arr) ? (arr as string[]) : []
+}
 
 interface BrowsingRecord {
   url: string
@@ -280,15 +279,15 @@ function getDailyIndex(seed: string, arrayLength: number): number {
   return Math.abs(hash) % arrayLength
 }
 
-const dailyMotto = ref('Shadow Mate · 始终守护')
-const dailyQuote = ref('伴影 · Shadow Mate')
+const dailyMotto = ref('')
+const dailyQuote = ref('')
 const isEnabled = ref(true)
 const clipboardEnabled = ref(true)
 const sunsetTime = ref('18:00')
 const todayData = ref<BrowsingRecord[]>([])
 const clipboardHistory = ref<ClipboardItem[]>([])
 const copyBtnState = ref<number | null>(null)
-const resetBtnText = ref('重置今日提示状态')
+const resetBtnText = ref('')
 const defaultIcon = chrome.runtime.getURL('icons/logo.png')
 const floatingGhostUrl = chrome.runtime.getURL('icons/ghost.gif')
 const ghostIconUrl = chrome.runtime.getURL('icons/ghost.png')
@@ -296,7 +295,7 @@ const useGhostEmojiFallback = ref(false)
 const loading = ref(true)
 const loadError = ref('')
 const showMorningGreeting = ref(false)
-const morningGreetingText = ref('早，今天也一起吧 ✨')
+const morningGreetingText = ref('')
 const showFloatingFindMe = ref(false)
 const showInteractionBubble = ref(false)
 const interactionMessage = ref('')
@@ -350,18 +349,22 @@ const sortedHistory = computed(() =>
 const companionDays = ref(0)
 const currentMilestone = ref<{ label: string; icon: string } | null>(null)
 
-const MILESTONE_LEVELS: { minDays: number; maxDays: number; label: string; icon: string }[] = [
-  { minDays: 7, maxDays: 13, label: '初识', icon: 'sparkle' },
-  { minDays: 14, maxDays: 29, label: '相知', icon: 'flower' },
-  { minDays: 30, maxDays: 59, label: '相伴', icon: 'leaf' },
-  { minDays: 60, maxDays: 99, label: '老友', icon: 'cup' },
-  { minDays: 100, maxDays: 364, label: '挚友', icon: 'heart' },
-  { minDays: 365, maxDays: 99999, label: '一年之约', icon: 'star' }
+const MILESTONE_LEVELS: { minDays: number; maxDays: number; labelKeyIndex: number; icon: string }[] = [
+  { minDays: 7, maxDays: 13, labelKeyIndex: 0, icon: 'sparkle' },
+  { minDays: 14, maxDays: 29, labelKeyIndex: 1, icon: 'flower' },
+  { minDays: 30, maxDays: 59, labelKeyIndex: 2, icon: 'leaf' },
+  { minDays: 60, maxDays: 99, labelKeyIndex: 3, icon: 'cup' },
+  { minDays: 100, maxDays: 364, labelKeyIndex: 4, icon: 'heart' },
+  { minDays: 365, maxDays: 99999, labelKeyIndex: 5, icon: 'star' }
 ]
 
 function getMilestoneForDays(days: number): { label: string; icon: string } | null {
+  const labels = getArray('popup.milestones')
   for (const m of MILESTONE_LEVELS) {
-    if (days >= m.minDays && days <= m.maxDays) return { label: m.label, icon: m.icon }
+    if (days >= m.minDays && days <= m.maxDays) {
+      const label = labels[m.labelKeyIndex] ?? ''
+      return { label, icon: m.icon }
+    }
   }
   return null
 }
@@ -423,11 +426,17 @@ async function loadSettings() {
   const settings = await chrome.storage.local.get({
     sunsetTime: '18:00',
     isEnabled: true,
-    clipboardEnabled: true
+    clipboardEnabled: true,
+    languageOverride: null as string | null
   })
   sunsetTime.value = settings.sunsetTime
   isEnabled.value = settings.isEnabled
   clipboardEnabled.value = settings.clipboardEnabled !== false
+  if (settings.languageOverride === 'zh' || settings.languageOverride === 'en') {
+    locale.value = settings.languageOverride
+    updateDailyMotto()
+    updateDailyQuote()
+  }
 }
 
 async function loadClipboard() {
@@ -443,57 +452,20 @@ async function loadClipboard() {
 }
 
 function updateDailyMotto() {
+  const mottos = getArray('popup.mottos')
+  if (mottos.length === 0) return
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
-  dailyMotto.value = MOTTOS[getDailyIndex(dateStr, MOTTOS.length)]
+  dailyMotto.value = mottos[getDailyIndex(dateStr, mottos.length)]
 }
 
 function updateDailyQuote() {
+  const quotes = getArray('popup.quotes')
+  if (quotes.length === 0) return
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}-quote`
-  dailyQuote.value = QUOTES[getDailyIndex(dateStr, QUOTES.length)]
+  dailyQuote.value = quotes[getDailyIndex(dateStr, quotes.length)]
 }
-
-const MORNING_GREETINGS = [
-  '早，今天也一起吧 ✨',
-  '早安，伴影在呢 ✨',
-  '早上好，今天也一起 ✨',
-  '早呀，新的一天开始了 ✨',
-  '早，今天也要温柔对待自己 ✨',
-  '早安，今天也一起走吧 ✨',
-  '早上好，伴影陪你 ✨',
-  '早呀，今天也一起吧 ✨',
-]
-const NOON_GREETINGS = [
-  '午安，今天也一起吧 ✨',
-  '午安，伴影在呢 ✨',
-  '中午好，歇一歇再继续 ✨',
-  '午安呀，今天也一起 ✨',
-  '中午好，伴影陪你 ✨',
-  '午安，下午也一起走吧 ✨',
-  '午安呀，今天也要温柔对待自己 ✨',
-  '中午好，今天也一起吧 ✨',
-]
-const EVENING_GREETINGS = [
-  '傍晚好，今天也一起吧 ✨',
-  '傍晚好，伴影在呢 ✨',
-  '傍晚呀，离归航不远了 ✨',
-  '傍晚好，今天也一起 ✨',
-  '傍晚呀，伴影陪你 ✨',
-  '傍晚好，今天辛苦了 ✨',
-  '傍晚呀，今天也一起走吧 ✨',
-  '傍晚好，温柔对待自己 ✨',
-]
-const NIGHT_GREETINGS = [
-  '夜深了，今天也一起吧 ✨',
-  '夜深了，伴影在呢 ✨',
-  '还没休息呀，今天也一起 ✨',
-  '夜深了，早点休息 ✨',
-  '夜深呀，伴影陪你 ✨',
-  '夜深了，今天辛苦了 ✨',
-  '还没睡呀，今天也一起吧 ✨',
-  '夜深了，温柔对待自己 ✨',
-]
 
 function getMorningGreetingByHour(): string {
   const now = new Date()
@@ -502,18 +474,19 @@ function getMorningGreetingByHour(): string {
   let pool: string[]
   let seed: string
   if (h >= 5 && h < 12) {
-    pool = MORNING_GREETINGS
+    pool = getArray('popup.morningGreetings')
     seed = `${dateStr}-morning`
   } else if (h >= 12 && h < 18) {
-    pool = NOON_GREETINGS
+    pool = getArray('popup.noonGreetings')
     seed = `${dateStr}-noon`
   } else if (h >= 18 && h < 22) {
-    pool = EVENING_GREETINGS
+    pool = getArray('popup.eveningGreetings')
     seed = `${dateStr}-evening`
   } else {
-    pool = NIGHT_GREETINGS
+    pool = getArray('popup.nightGreetings')
     seed = `${dateStr}-night`
   }
+  if (pool.length === 0) return tKey('popup.defaultQuote')
   return pool[getDailyIndex(seed, pool.length)]
 }
 
@@ -546,7 +519,8 @@ async function onFindMeClick() {
     await chrome.storage.local.set({ lastInteractionDate: today, interactionCountToday: 0 })
   }
   if (count >= 10) {
-    interactionMessage.value = getOverLimitMessage(today)
+    const interaction = (messages.value as Record<string, unknown>).interaction as { overLimit: string[] } | undefined
+    interactionMessage.value = getOverLimitMessage(today, interaction)
     showInteractionBubble.value = true
     if (interactionBubbleTimer) clearTimeout(interactionBubbleTimer)
     const duration = getInteractionBubbleDuration(interactionMessage.value)
@@ -556,7 +530,8 @@ async function onFindMeClick() {
   count += 1
   await chrome.storage.local.set({ interactionCountToday: count })
   const seed = `${today}-${count}`
-  const { text } = getInteractionContent(seed)
+  const interaction = (messages.value as Record<string, unknown>).interaction as import('./interactionLibrary').InteractionMessages | undefined
+  const { text } = getInteractionContent(seed, interaction)
   interactionMessage.value = text
   showInteractionBubble.value = true
   if (interactionBubbleTimer) clearTimeout(interactionBubbleTimer)
@@ -615,7 +590,7 @@ async function copyClipboardItem(text: string, e: Event) {
     copyBtnState.value = idx
     setTimeout(() => { copyBtnState.value = null }, 1000)
   } catch {
-    alert('复制失败，请重试')
+    alert(tKey('popup.copyFail'))
   }
 }
 
@@ -627,7 +602,7 @@ async function deleteClipboardItem(index: number) {
 }
 
 async function clearAllClipboard() {
-  if (!confirm('确定要清空所有复制记录吗？此操作不可恢复。')) return
+  if (!confirm(tKey('popup.clearConfirm'))) return
   await chrome.storage.local.set({ clipboardHistory: [] })
   clipboardHistory.value = []
 }
@@ -637,21 +612,27 @@ async function resetRitual() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (tab?.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_SUNSET' }).catch(() => {
-      alert('重置成功！请刷新页面以看到效果。')
+      alert(tKey('popup.resetSuccess'))
     })
   }
-  resetBtnText.value = '✅ 已重置并尝试触发'
-  setTimeout(() => { resetBtnText.value = '重置今日提示状态' }, 2000)
+  resetBtnText.value = tKey('popup.resetDone')
+  setTimeout(() => { resetBtnText.value = tKey('popup.resetBtn') }, 2000)
 }
 
 onMounted(() => {
-  updateDailyMotto()
-  updateDailyQuote()
   loading.value = true
   loadError.value = ''
+  getEffectiveLocale().then((l) => {
+    locale.value = l
+    resetBtnText.value = tKey('popup.resetBtn')
+    const defQuote = tKey('popup.defaultQuote')
+    if (!dailyQuote.value) dailyQuote.value = defQuote
+    updateDailyMotto()
+    updateDailyQuote()
+  })
   Promise.all([loadSettings(), loadDashboard(), loadClipboard(), loadCompanionMilestone()])
     .catch((e) => {
-      loadError.value = e?.message || '加载失败，请重试'
+      loadError.value = e?.message || tKey('popup.loadFail')
     })
     .finally(() => {
       loading.value = false
@@ -1427,15 +1408,56 @@ onMounted(() => {
 }
 
 .footer {
-  padding: 12px;
+  padding: 12px 16px 16px;
   text-align: center;
   font-size: 10px;
   color: #bbb;
   background: #f8f9fa;
 }
 
+.footer-text {
+  margin: 0 0 10px;
+}
+
 .debug-actions {
   margin-bottom: 8px;
+}
+
+.footer-language {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.language-pill {
+  display: inline-flex;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 20px;
+  gap: 2px;
+}
+
+.language-pill-btn {
+  font-size: 10px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.language-pill-btn:hover:not(.active) {
+  color: #666;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.language-pill-btn.active {
+  background: white;
+  color: #e67e22;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .btn-reset {
